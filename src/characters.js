@@ -158,9 +158,10 @@ export class Player extends AnimatedCharacter {
     if (mag > 0.01) {
       const sin = Math.sin(cameraYaw);
       const cos = Math.cos(cameraYaw);
-      // camera forward is (sin, cos) in xz — build world-space move dir
-      const wx = ix * cos + iy * sin;
-      const wz = -ix * sin + iy * cos;
+      // camera forward is (sin, cos) in xz; screen-right is forward x up
+      // = (-cos, sin). world move = right * ix + forward * iy
+      const wx = -ix * cos + iy * sin;
+      const wz = ix * sin + iy * cos;
       const speed = (input.running ? RUN_SPEED : WALK_SPEED) * mag;
       targetVX = wx * speed;
       targetVZ = wz * speed;

@@ -171,11 +171,11 @@ export function buildRoadMarkings() {
   const group = new THREE.Group();
   group.name = 'road-markings';
 
-  // DoubleSide: the ribbon winding faces down, and it's a handful of tris
+  // DoubleSide: the ribbon winding faces down, and it's a handful of tris.
+  // No polygonOffset — the ribbons sit 0.14 above the road, and offsetting
+  // depth makes them draw on top of characters standing on them.
   const paint = new THREE.MeshBasicMaterial({
     color: '#f4ecd7',
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
     fog: true,
     side: THREE.DoubleSide,
   });
@@ -196,8 +196,6 @@ export function buildRoadMarkings() {
   // dark tar cracks wandering across the asphalt
   const crackMat = new THREE.MeshBasicMaterial({
     color: '#41454e',
-    polygonOffset: true,
-    polygonOffsetFactor: -3,
     fog: true,
     side: THREE.DoubleSide,
   });
