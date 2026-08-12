@@ -1,0 +1,160 @@
+import * as THREE from 'three';
+import './style.css';
+
+import { buildTerrain, buildRoadMarkings, heightAt } from './terrain.js';
+import { buildSky, buildClouds, buildBirds } from './sky.js';
+import { buildScatter } from './scatter.js';
+import { buildProps } from './props.js';
+import { Input } from './input.js';
+import { CameraRig } from './camera.js';
+import { loadCharacterGLBs, createRig, Player, NPC } from './characters.js';
+
+const FOG_COLOR = '#eeddc0';
+const isMobile = window.matchMedia('(pointer: coarse)').matches;
+
+// ---------- renderer / scene ----------
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.75 : 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(FOG_COLOR);
+scene.fog = new THREE.Fog(FOG_COLOR, 55, 165);
+
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 700);
+
+// ---------- lights ----------
+
+const hemi = new THREE.HemisphereLight('#bfe0f2', '#9aa66f', 0.8);
+scene.add(hemi);
+
+const SUN_DIR = new THREE.Vector3(0.55, 0.72, -0.42).normalize();
+const sun = new THREE.DirectionalLight('#fff0d0', 1.7);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(isMobile ? 1024 : 2048);
+sun.shadow.camera.near = 10;
+sun.shadow.camera.far = 140;
+sun.shadow.camera.left = -28;
+sun.shadow.camera.right = 28;
+sun.shadow.camera.top = 28;
+sun.shadow.camera.bottom = -28;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.5;
+scene.add(sun);
+scene.add(sun.target);
+
+// ---------- world ----------
+
+scene.add(buildTerrain());
+scene.add(buildRoadMarkings());
+scene.add(buildSky());
+
+const clouds = buildClouds();
+scene.add(clouds.group);
+
+const birds = buildBirds();
+scene.add(birds.group);
+
+const scatter = buildScatter({ isMobile });
+scene.add(scatter.group);
+
+const props = buildProps();
+scene.add(props.group);
+
+const colliders = [...scatter.colliders, ...props.colliders];
+
+// ---------- characters ----------
+
+const input = new Input();
+const rig = new CameraRig(camera);
+
+let player = null;
+const npcs = [];
+
+const overlay = document.getElementById('overlay');
+const enterBtn = document.getElementById('enter-btn');
+const progressFill = document.getElementById('progress-fill');
+const progressTrack = document.getElementById('progress-track');
+const hint = document.getElementById('hint');
+
+const manager = new THREE.LoadingManager();
+manager.onProgress = (_url, loaded, total) => {
+  progressFill.style.width = `${Math.round((loaded / total) * 100)}%`;
+};
+
+loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
+  .then(([rogue, knight, barbarian]) => {
+    player = new Player(createRig(rogue));
+    scene.add(player.root);
+
+    const npcSources = [knight, barbarian, rogue];
+    npcSources.forEach((gltf, i) => {
+      const npc = new NPC(createRig(gltf), i * 7 + 3);
+      npcs.push(npc);
+      scene.add(npc.root);
+    });
+
+    progressFill.style.width = '100%';
+    enterBtn.disabled = false;
+    enterBtn.textContent = 'take a walk';
+    enterBtn.classList.add('ready');
+    progressTrack.style.opacity = '0';
+  })
+  .catch((err) => {
+    console.error('Character loading failed:', err);
+    enterBtn.textContent = 'could not load characters — check console';
+  });
+
+enterBtn.addEventListener('click', () => {
+  overlay.classList.add('fade-out');
+  input.enabled = true;
+  hint.textContent = input.isTouch
+    ? 'drag anywhere to walk'
+    : 'WASD to walk · shift to run · space to jump';
+  hint.classList.remove('hidden');
+  setTimeout(() => hint.classList.add('hidden'), 7000);
+});
+
+// ---------- resize ----------
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- loop ----------
+
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  input.update();
+  scatter.timeUniform.value = elapsed;
+  clouds.update(dt);
+  birds.update(dt, elapsed);
+
+  if (player) {
+    player.update(dt, input, rig.yaw, colliders);
+    for (const npc of npcs) npc.update(dt, colliders);
+    rig.update(dt, player, input);
+
+    // keep the shadow frustum centered on the player
+    sun.position.copy(player.root.position).addScaledVector(SUN_DIR, 70);
+    sun.target.position.copy(player.root.position);
+  } else {
+    // idle establishing shot while loading: drift over the road crest
+    const t = elapsed * 0.05;
+    camera.position.set(Math.sin(t) * 4, heightAt(0, 20) + 4.5, 24 + Math.cos(t * 0.7));
+    camera.lookAt(0, heightAt(0, -20) + 2, -30);
+  }
+
+  renderer.render(scene, camera);
+});

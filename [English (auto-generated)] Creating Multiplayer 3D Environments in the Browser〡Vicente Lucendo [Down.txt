@@ -1,0 +1,639 @@
+[Music]
+going to be talking about creating
+multiplayer 3D environments in the
+browser and um there's going to be a few
+things I made this experience uh earlier
+this year uh it was like a personal
+project and uh I I had to do a little
+bit of everything on it uh 3D modeling
+our Direction uh development technical
+art multiplayer so this I'm going to be
+covering like some um topics that are
+maybe more developer focused but I think
+it's a it's uh like like an overview of
+the whole project that hopefully uh yeah
+uh you like it as much as I as I did
+this is a small video of the of the
+project so as you can see you uh enter
+an environment and you're a small kid
+and you can explore it so you can go to
+the woods you can go to the to the beach
+there are some um hidden secrets that
+you can find in this cover there's a
+beach and some like uh yeah Birds a road
+so and a sloth I use that as a as a like
+Avatar everywhere so I put a sloth in
+there um so the motivations that I had
+to to do this project were to practice
+some uh procedural 3D modeling these are
+some sketches that I've been doing on my
+spare time I don't post them anywhere
+like they're just on my hard drive but
+uh I really like the idea of of making
+like one of these things like procedure
+with like code and and and algorithms
+and a little bit of like manual tweaking
+but like automating a lot of things and
+uh also another motivation was to be
+able to do um uh when you see something
+on Awards a project you are you are like
+or at least I I think oh I I think I
+know how to make that but unless until
+you you actually make it you don't
+really know like all the small details
+how to make this texture work how this
+animation so I I I I saw some of these
+experiences before and I was like yeah I
+want to do one of those to learn all
+these like small details and all these
+things but also more importantly um I
+had this uh I saw this tweet like 5
+years ago and it's made by a guy uh
+named Nathan and uh yeah I have a too
+list of things and I saw this onion
+running around and and collecting this
+uh this uh Circle things and I was like
+yeah this is I I have to do this so like
+five years later this is my my take at
+doing the running
+onion um and of course like some really
+really cool projects by uh by really
+talented agencies and people uh secret
+Skype by active Theory Coastal World by
+Mercy Michelle and so soen by ubo there
+are others but these are just the three
+that I don't know were more influential
+to to me when I first saw them and yeah
+sites of the month and yeah super
+impressive stuff so uh starting the
+development
+um this is a bit sad but this is how I
+started things I'm a developer mostly
+these days technical artist developer so
+I started with like Focus focusing on
+the development which maybe is not the
+best uh for this project I think it's
+kind of okay but but yeah there are many
+many ways to St one of these so what do
+I need I need a character uh a floor and
+I need that character to be uh to have a
+nose or to know like where it's going
+because yeah you have to code all the
+systems so I made this thing so start
+with the controls and the the camera
+system uh for the controls uh yeah this
+is where like the talk shows that it was
+a developer talk so sorry apologies for
+for that but you need to know like where
+the character goes you need to have the
+vectors the direction the magnitude also
+very interesting because it's going to
+show later you need to know where the up
+Vector is the up Vector is like a like a
+pointer that it's on your head and
+basically our up Vector is not the same
+one as someone from Sydney on Australia
+they pointed their up Vector is pointed
+pointing someone else so uh that is
+important uh to know when these
+experiences because the moment I don't
+know you you want to make like a globe
+and everyone should like uh you know be
+attracted Ed by by by the gravity that
+up Vector becomes a thing so this is the
+first version of the the the thing I was
+pretty proud about about this uh back in
+the day and um yeah so next is the
+camera uh the camera um you you need to
+like uh point at the character and you
+need to control it and the camera is
+important because when someone uh I
+don't know it's on an iPad and and goes
+to the right if the camera is behind me
+if I'm the character if if the user
+wants me to go to to the right it's on
+that direction but if like you are the
+character and the camera is behind you
+and they goes to the right it's that
+direction so the camera like you need to
+you need to take care of all those
+things all those details where is the
+camera at so that a character can go one
+way or another so um yeah that took a
+little bit of time and finally the
+physics I made like a simple like
+physics system that uh you get the
+gravity you can jump so you add the
+force to the to the character and um
+yeah and also different frame rates I
+think maybe this could apply for for uh
+not specifically through the websites
+but also for uh all kinds of websites
+when do we do like satisfying animations
+and interpolations it's uh nice to test
+things on I don't know like a latest
+iPhone I think it goes at 120 FPS and an
+older one because the physics and all
+these systems like sometimes they rely
+on the frame rate so it's good I I do
+for example I have two monitors I put
+one in 60 FPS another one in like 144 I
+think it is and and to test things like
+everywhere so every user I don't know it
+would be very sad a fly somewhere it
+would be very sad for um for a for a
+user to run like faster than other user
+so you need to keep keep those things in
+mind and this is the version one of the
+of the character and as you can see here
+I was dragging the camera I was doing
+this and and um like maybe like video
+games so the Snowman could jump and
+could could go to places but I noticed
+that um that camera was not uh this is
+more it's more maybe for gamers uh you
+know that are used to moving the camera
+and things like that so this is the
+version two of the camera so you can see
+as you move the mouse like it Tils a
+little bit so it gives some depth to the
+to the experience also has some like
+kind of like floaty uh animation on it
+so it's more alive and it automatically
+follows the character so you don't have
+to drag anything you just go places and
+and the camera follows you I tried this
+on an iPad with my mom uh so to see if
+she could um um navigate the environment
+and she could so to me that was proof um
+that that this is maybe best for non-
+gamers
+um so yeah and collisions uh basically
+uh like all of these like beautiful
+environments that we see on video games
+on experiences they all like look like
+uh like this thing at the bottom they
+look like triangles so when the when we
+have a character that I don't know you
+bump into a tree and when want the
+character to go against the tree you
+need to test when Eng those against
+those triangles and and to do that
+that's very expensive on a browser these
+days so you need to come up with like
+techniques and and strategies and
+there's one thing called acceleration
+structures that you basically you have
+all these triangles so you divide them
+in squares and you are decide in what
+Square the character is and basically
+you just test against those triangles
+and these are test those uh squares you
+see are like U these uh kind of
+acceleration structors the visual
+representation of them so um yeah that's
+um and for that I use a li liary um that
+is uh open source and it's very nice is
+uh made by gar Johnson and it allows you
+to do all these things in a very nice
+way if I had to do one of these it would
+have taken me uh like a long time like
+months really so yeah and once you have
+all of these systems uh coming together
+uh you can start like seeing something
+visual you can start like having fun a
+little bit and you can like do a small
+planet like King Kai's little planet
+test here where you are a character and
+you can just like walk around and you
+and then everything rotates and and the
+possibilities are are I don't know
+enormous you can do like all sorts of
+things when you have these things
+working um and also another test like an
+Inception type of type of environment so
+if you imagine these cubes are buildings
+you can build like like one of those
+like cities that I don't know crawl over
+you which are I don't know could be
+pretty pretty
+nice um all right so now uh concept art
+style and and sound so the main goal I
+had with this experience was to to do
+procedural art but also to convey a
+feeling um the feeling of of nostalgia I
+think it's a very powerful one
+especially as we grow older we start
+like remembering old times of of the
+past and actually when we see webgl
+things it's it's very good at like
+combining like technology and flashy
+things we I don't know we we you can do
+very cool things and very very bright
+things with web but I think there's a
+little bit of like under representation
+of other type of experiences other that
+convey more like a sad feeling or fear
+or like Nostalgia so I wanted to do
+something a bit different than the than
+the flashy technological very cool web G
+thing that maybe we are more used to
+seeing these days um yeah and I'm I'm
+from Spain so I miss the Mediterranean
+Villages uh in the summer so I wanted to
+to have a little bit of that I did that
+in the winter so that's probably why if
+I had to do that in the summer maybe it
+would have been like I don't know uh a
+winter afternoon so not really but maybe
+um um art style and look uh simple but
+but elegant warmer colors some Zelda
+miyasaki Vibes a style that could be
+translated into low polygons so I didn't
+I'm like an impostor here I'm not like a
+3D modeler so I I know my limitations so
+I have to go with a style that uh that
+kind of embrace my limitations and work
+with them rather than try to fight them
+and um and also texturing workflow very
+simple something with flat colors I
+didn't I'm I didn't want to get into
+like painting a lot of a lot of detail
+into things so uh yeah and finally the
+sound and the music uh the guitar I try
+a bunch of things uh and the guitar was
+what works best or what worked best for
+my for my experiment um adding to many
+sounds seem to wors in the overall
+experience I wanted it to be uh very
+calm very chill very like uh yeah calm
+let's say so adding stuff adding like a
+jump sound or colliding sounds seem to
+worsen that feeling and um I also had to
+tweak the sounds so if they were too
+flat I would add like a dog barking or
+bird chering or things like that so as
+you can see this is me like doing a lot
+of stuff that I'm not used to and trying
+to figure out like how to do all of that
+like in a okay way so yeah um 3D
+modeling um well for the assembly I'm I
+use Houdini it's a program that it's um
+it's very powerful if you see like U I
+don't know bfx houses or or movies uh
+Studios that produce movies they're
+using it more and more these days
+because it's a program that allows
+access all types of geometry
+simulations um and and you can put like
+really heavy scenes and it's procedural
+so it means that if you change one thing
+like you don't do it manually you don't
+usually you don't do it like you don't
+drag things and that's it you try to do
+it in a way where like changes are are
+automatic so someone tells you I want
+the light like coming from a different
+side and I want the simulation to do
+something else in hini that's doable in
+other programs it's like really hard to
+do that so I use that for for this um
+and finally the main goal of doing this
+was uh to do practice some procedural
+modeling and these are some tests that I
+do yeah for fun and um the pro of of
+procedural modeling is that you get
+infinite variations of things so if you
+model like U I don't know like a w you
+can get like many types of W's or you
+can get like many type of benches just
+dragging a few sliders changing some
+parameters
+and and you don't distract things so you
+can yeah everything everything you can
+make it wider taller whatever you want
+and it and it it's okay the cons is like
+uh if you want to do an animal for
+example it's really hard to do this
+procedurally or like a person but uh and
+some simple things sometimes uh require
+some very clever approaches some like
+you know you are proud of yourself for
+doing some really simple thing that
+someone could have done just by dragging
+like a a point in a in another program
+so so yeah this is me doing a little bit
+of procedural modeling uh this is a tree
+so as you can see start with the base
+then put some spheres uh put more Fe
+more spheres try to do some folage
+trying to do some um yeah like stylized
+look type of thing with volumes adding
+UVS adding some detail and doing it low
+poly this is a rock so to apply some
+noises some bulling operations and you
+do a rock this is a Street Lamp um so so
+you just um yeah model that and this is
+the main environment the main uh land so
+I do a tunnel there and then apply some
+uh noise to put some Ms in there um and
+then instead of like placing rocks and
+placing grass you I just draw the the
+density map let's say and then I just I
+want more more grass less grass and it
+automatically places everything so it's
+really nice you don't have to place all
+the Rocks manually you just like drag
+slider and you have rocks everywhere
+let's rck Okay drag slider back and less
+rocks so it's prettyy cool it's just on
+video games that we see open world video
+games these type of techniques are are
+very very widely used and everyone is
+kind of like try to automate all these
+things because creating Nature by hand
+is is like a massive task um another
+thing that I discover in the process is
+great boxing great boxing is great is
+this type of uh when you do one of these
+environments uh doing the design it it's
+uh something closer to to designing like
+a physical space like a an installation
+is like okay this is too big or I want
+more space in there so not committing to
+anything and trying to use placeholders
+it's it's really great when you do this
+uh these type of things and to iterate
+quickly it enables you to to do to try I
+don't know does this feel right I need a
+bigger Bush or more bushes there I need
+like another house in there so that is
+um that is very nice um and finally some
+destructive modeling it's like I said
+great for organic elements uh has so
+many Pros but I'm not very good at that
+so I try to to also know my limitations
+I modeled this alien up here in the in
+the right and I didn't know at that time
+that aliens were going to be that
+popular that year so I'm pretty yeah
+happy about that it looks like the
+Mexican uh aliens that the Mexican
+Government like published a month
+ago and this is me like doing some test
+to get familiar with the tools this is a
+robot dancing better than than I do um
+another robot it's an illustration by by
+a very good artist and tried to do that
+put some mix animations on
+it and this is the the main character of
+The Experience the kit um the experience
+I didn't mention this but it's a
+multiplayer so people can join and and
+there's many kits and when I designed
+this kid I made this test and I and I
+put like 10 kids and they were like
+smiling looking at each other and they
+look like sociopaths so what I did was
+to remove the mouth
+so this is the final model of the of the
+experience and as you can see uh Happ
+mouth it used to have a backpack but I
+removed that because I was wondering
+like what what what is he carrying I
+just like um yeah then I brought ad up
+to the to the Houdini to the to the 3D
+program that I mentioned to do like
+fingers animations and all these of this
+type of
+things and um of course like all all of
+these experiences require a lot of of
+optimizations a lot of tricks a lot of
+things that maybe were not intended and
+like in an ideal world you just put like
+everything you have in there it works
+and it's great but like in practice when
+an iPhone 7 is very junky for example so
+you need to make sure that it runs well
+like on most devices so for that um I
+did I write wrote my own exporters so
+when you are on a 3D program you can say
+export to something and those exporters
+that are open source are are great um
+but sometimes you want to be more custom
+sometimes you want to have more control
+on everything so I wrote mine uh with
+python and uh in the process you see a
+lot of weird stuff this is like funny
+weird stuff but I've seen like like
+really bad stuff like you know with that
+character and others while I was writing
+these exporters so
+yeah and this is a bird so you can see
+very low poly bird but this is a 3D
+program and this is a browser so I I I
+made made sure like everything was okay
+was nicely
+animated one of these techniques is fast
+room calling uh which means that you
+just just take care of what's on the on
+the view of the user so if you have uh
+trees behind you you just don't render
+those and that requires some
+optimization which is what this camera
+at the bottom is doing is doesn't render
+anything that is behind it so that is uh
+something you have to take care of when
+I'm making one of these another thing is
+uh let's say we are it's automatic
+splitting I call it that way but imagine
+we're um rendering like one of these
+towers maybe we can split it into three
+and if the user is just looking at the
+bottom you just don't render the upper
+part of the of the Tower so you can
+automate this with the 3D programs um if
+you take care of like all of the
+details and another thing is lods is
+level of detail so imagine we have a
+tree a tree we don't want to put like a
+really detailed tree like everywhere you
+want to put like a slightly less detail
+uh tree at the dist at the distance in a
+very sad looking one far away because
+the users cannot tell the difference and
+as they become closer as they reach
+these uh these trees you increase the
+the the the the the density of the
+polygons basically to make them nicer
+and to look nicer so yeah um this is an
+example of the LOD technique with a
+tower you can see the 3D program this is
+the maximum quality this is medium
+quality and this is low quality and as
+you can see doesn't change a lot like
+the shape is more or less the same but
+the difference is like half of the of
+the poly count which is like imagine
+like lots of towers I mean we are we are
+doing a lot of a lot of optimization in
+this uh in this side um Sky birds and
+shadows uh sky has some like technical
+difficulties so you can use this trick
+on the on the bottom right Zelda games I
+don't know if you have played them I
+played like I think pretty much all of
+them so one of the tricks that they use
+in the I think this is the Nintendo 64
+is to draw like a cube with the sky just
+where the camera is so you don't have to
+uh draw it like huge because like in web
+as distances grow um they uh the the
+Precision gets uh get slower you know
+start having issues so this is one
+optimization you can do for Birds a
+simple system again like I just draw a
+curve in the in the 3D program and I
+make like simulation so the birds follow
+that curve and in flocks and it looks
+like they they are going to they are
+going somewhere but no they just like
+follow in a curve you know it's a very
+simple trick and shadows again um mobile
+phones have a lot a lot of limitations
+so I I render one big Shadow and then
+one small one that follows the player
+and I blend between between those uh
+based on distance and that gives you
+illusion oh my God everything have
+shadows but no it's just really like a
+trick like most of these
+things um texturing workflows and color
+I use a single texture as you can see
+here on the right this is all the colors
+of the experience are in that small uh
+PNG and I just okay I say okay the
+number one this is color number two is
+this color and that's how I colored the
+whole experience I made a tool so I
+could like exam texture changes directly
+into the browser so I could paint almost
+with like Photoshop I could just drag
+the colors and as you can see the color
+of the trees are changing so it was
+really nice to have this because at some
+point I was looking at a house and I was
+like oh I need to make it like a more
+brown or whatever so if I had to go to
+photoshop shve refresh the page or
+something that would have been like huge
+pain so having this workflow work really
+well and finally Lots um when you do uh
+these type of experiences uh sometimes
+it's very easy to add postprocessing
+with code and um that works like a lot
+of the time but sometimes you want to
+have like a lot of control over the
+colors so for that you just take a
+screenshot bring it into into photosop
+or or photoa or any program really all
+all of them have support do a lot of twe
+a lot of tweaks the the greens can be
+brighter and then you export a file and
+you apply directly that into the browser
+these days is possible and you can I
+don't know just work on a first draft of
+the colors and then apply post
+processing to have uh the final uh color
+palette that you want um and then
+multiplayer
+I wanted to do the motivation to do
+multiplayer was to it to me it feels
+magical to have multiplayer in in in in
+in the web to me when even when I'm
+browsing figma if I see another another
+cursor I'm like hm this is uh you know
+someone is here with me so it's uh it's
+kind of nice so I wanted to have that so
+like there were some Secrets scattered
+around the experience I wanted players
+to to help each other so I did a
+multiplayer um a multiplayer server for
+for it
+um yeah basically I optimize a lot this
+server because I this is an experience
+but I made a server that could be used
+for installations could be used for any
+type of experiences for like the figma
+type of thing so I spend like more than
+I that I wanted really doing the
+multiplayer server because I'm not a
+backend developer so I I didn't want to
+like deal with that a lot in the
+future and uh of course you now that you
+are we obsessing over this you want to
+obsess what if I launch something uh and
+it has thousands of of of players I
+don't want them you know to be stuck or
+to work bad so I spend extra time also
+making sure like everything was scalable
+everything could scale up to thousands
+of of players at the same time um yeah
+and then uh publishing it um when I was
+about to publish it I believe like uh
+you know when you look at something
+you've been doing for a couple of months
+like every day like I lose perspective
+completely and I'm like oh my God this
+is like so bad like it's going to get
+five likes on Twitter and uh yeah so
+that was my mindset when I when I
+published it but I was more like this uh
+raccoon over here um I'm an introvert so
+waking up every morning with to a lot of
+like notifications and emails and things
+like that was uh I don't know these
+influencers we we see on Twitter I don't
+know how they have anything like any
+work done during the day with all the
+sounds and all the all the things you
+know so yeah this raccoon like really
+resonated with me
+and um yeah it won awards that was very
+nice and um I don't know like maybe you
+are familiar with Hacker News it's a
+technology Forum it reach number one
+post and it's very funny because or at
+least it is to me because we a lot of
+the time we um care a lot about
+satisfying animations or composition or
+color palettes but these people care
+about this experience working on an old
+Nokia phone that's all they talked about
+and having that perspective on things
+was uh I don't know it showed me that
+there's also like you know this type of
+really big uh I don't know um type of
+Prior they prioritize other things above
+what we do so finding that middle ground
+I think is is is uh something also we
+should we we should like try to try to
+try to do
+um and I also saw this tweet by a
+Japanese person U saying that uh that he
+wish uh he could make something like
+this and that also I reson it resonated
+a lot with me because that's how how I
+feel these days I see younger um
+developers younger designers doing like
+amazing things especially on Twitter
+which is the main thing that I that I Ed
+to to stay up to date these days and I'm
+like yeah I wish I could do something
+like that and something like that so
+when I saw this message I was like yeah
+man I'm like I'm like you um yeah and
+that's uh that's it thank
+[Applause]
+[Music]
+you folks
