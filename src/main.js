@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
 
-import { buildTerrain, buildRoadMarkings, heightAt } from './terrain.js';
+import { buildTerrain, buildRoadMarkings, heightAt, roadX } from './terrain.js';
 import { buildSky, buildClouds, buildBirds } from './sky.js';
 import { buildScatter } from './scatter.js';
 import { buildProps } from './props.js';
@@ -59,11 +59,11 @@ scene.add(clouds.group);
 const birds = buildBirds();
 scene.add(birds.group);
 
-const scatter = buildScatter({ isMobile });
-scene.add(scatter.group);
-
 const props = buildProps();
 scene.add(props.group);
+
+const scatter = buildScatter({ isMobile, avoid: props.colliders });
+scene.add(scatter.group);
 
 const colliders = [...scatter.colliders, ...props.colliders];
 
@@ -89,6 +89,13 @@ manager.onProgress = (_url, loaded, total) => {
 loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
   .then(([rogue, knight, barbarian]) => {
     player = new Player(createRig(rogue));
+    // debug spawn override: ?z=-50 (x defaults to the road at that z)
+    const params = new URLSearchParams(location.search);
+    if (params.has('z') || params.has('x')) {
+      const z = parseFloat(params.get('z') ?? '30');
+      const x = params.has('x') ? parseFloat(params.get('x')) : roadX(z);
+      player.root.position.set(x, heightAt(x, z), z);
+    }
     scene.add(player.root);
 
     const npcSources = [knight, barbarian, rogue];

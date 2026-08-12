@@ -30,6 +30,11 @@ function merge(geos) {
 
 const woodMat = () => new THREE.MeshLambertMaterial({ vertexColors: true });
 
+// yaw of the road's tangent at z — used to align props with the road
+function roadAngle(z) {
+  return Math.atan2(roadX(z + 0.5) - roadX(z - 0.5), 1);
+}
+
 export function buildProps() {
   const group = new THREE.Group();
   group.name = 'props';
@@ -122,8 +127,13 @@ export function buildProps() {
 
   // ---------- benches near the crest ----------
 
-  function bench(x, z, rotY) {
-    const y = heightAt(x, z);
+  // side: +1 = right of the road, -1 = left. The bench sits parallel to the
+  // road, seat facing it, and settles on the lowest of its four leg corners
+  // so it never floats off the shoulder slope.
+  function bench(z, side) {
+    const x = roadX(z) + side * 5.2;
+    const rotY = roadAngle(z) + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+
     const parts = [];
     for (const dx of [-0.85, 0.85]) {
       const leg = new THREE.BoxGeometry(0.12, 0.5, 0.55);
@@ -142,14 +152,26 @@ export function buildProps() {
     }
     const g = merge(parts);
     g.rotateY(rotY);
-    g.translate(x, y, z);
+
+    let y = Infinity;
+    const cs = Math.cos(rotY);
+    const sn = Math.sin(rotY);
+    for (const [dx, dz] of [[-0.85, -0.3], [0.85, -0.3], [-0.85, 0.3], [0.85, 0.3]]) {
+      const wx = x + dx * cs + dz * sn;
+      const wz = z - dx * sn + dz * cs;
+      y = Math.min(y, heightAt(wx, wz));
+    }
+    g.translate(x, y - 0.02, z);
     colliders.push({ x, z, r: 1.0 });
     return g;
   }
 
   // ---------- wooden road barrier ----------
 
-  function barrier(x, z, rotY) {
+  // sits across the road (perpendicular to its tangent), half-blocking a lane
+  function barrier(z, offset) {
+    const x = roadX(z) + offset;
+    const rotY = roadAngle(z);
     const y = heightAt(x, z);
     const parts = [];
     for (const dx of [-1.1, 1.1]) {
@@ -170,13 +192,8 @@ export function buildProps() {
     return g;
   }
 
-  const crestZ = -52;
   const woodwork = new THREE.Mesh(
-    merge([
-      bench(roadX(crestZ) + 5.6, crestZ, 0.5),
-      bench(roadX(crestZ + 9) - 5.9, crestZ + 9, -2.4),
-      barrier(roadX(-96) + 1.2, -96, 0.15),
-    ]),
+    merge([bench(-52, 1), bench(-43, -1), barrier(-96, 1.2)]),
     woodMat()
   );
   woodwork.castShadow = true;

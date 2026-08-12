@@ -234,11 +234,20 @@ function scatterInstanced(geo, material, tries, accept, opts = {}) {
   return { mesh, placed };
 }
 
-export function buildScatter({ isMobile }) {
+export function buildScatter({ isMobile, avoid = [] }) {
   const group = new THREE.Group();
   group.name = 'scatter';
   const colliders = [];
   const timeUniform = { value: 0 };
+
+  // keep scattered things away from hand-placed props (benches, poles...)
+  const nearAvoid = (x, z, margin) =>
+    avoid.some((a) => {
+      const dx = x - a.x;
+      const dz = z - a.z;
+      const min = a.r + margin;
+      return dx * dx + dz * dz < min * min;
+    });
 
   const flatWhite = () => new THREE.MeshLambertMaterial({ vertexColors: true });
 
@@ -249,7 +258,7 @@ export function buildScatter({ isMobile }) {
       makeTree(v),
       flatWhite(),
       treeBudget[v],
-      (x, z) => roadDist(x, z) > 9 && Math.hypot(x, z) > 12,
+      (x, z) => roadDist(x, z) > 9 && Math.hypot(x, z) > 12 && !nearAvoid(x, z, 1.8),
       { scale: () => 0.8 + Math.random() * 0.7 }
     );
     mesh.castShadow = true;
@@ -263,7 +272,7 @@ export function buildScatter({ isMobile }) {
       makeBush(dark),
       flatWhite(),
       isMobile ? 30 : 44,
-      (x, z) => roadDist(x, z) > 6.2,
+      (x, z) => roadDist(x, z) > 6.2 && !nearAvoid(x, z, 1.2),
       { scale: () => 0.7 + Math.random() * 1.1 }
     );
     mesh.castShadow = true;
@@ -275,7 +284,7 @@ export function buildScatter({ isMobile }) {
     makeRock(),
     flatWhite(),
     isMobile ? 26 : 40,
-    (x, z) => roadDist(x, z) > 5,
+    (x, z) => roadDist(x, z) > 5 && !nearAvoid(x, z, 1.6),
     { scale: () => 0.35 + Math.random() * 1.3, sink: -0.15 }
   );
   rocks.castShadow = true;
@@ -318,6 +327,7 @@ export function buildScatter({ isMobile }) {
     (x, z) => {
       if (roadDist(x, z) < 6.4) return false;
       if (heightAt(x, z) > 9) return false; // not on the bare dune tops
+      if (nearAvoid(x, z, 0.6)) return false;
       // avoid the sandy noise patches so grass sits on green
       return fbm2(x * 0.05 + 31, z * 0.05 + 17) < 0.45 || Math.random() < 0.2;
     },
