@@ -135,9 +135,10 @@ export function buildTerrain() {
 
 // A flat ribbon that follows the road surface — used for paint lines & cracks.
 // centerFn(z) returns the lateral offset from the road center at that z.
-// y sits well above the terrain mesh: the mesh linearly interpolates between
-// grid vertices, so it can bulge above the analytic height between them.
-function buildRibbon(zStart, zEnd, step, width, offsetFn, y = 0.14) {
+// y hugs the road: just enough clearance over the terrain mesh (which
+// deviates <1cm from the analytic height on the road) without slicing
+// through the feet of characters standing on the paint.
+function buildRibbon(zStart, zEnd, step, width, offsetFn, y = 0.025) {
   const positions = [];
   const indices = [];
   const side = new THREE.Vector3();
@@ -210,7 +211,7 @@ export function buildRoadMarkings() {
       0.7,
       0.09,
       (z) => Math.sin(z * wobble + phase) * 1.6 + drift,
-      0.13
+      0.018
     );
     group.add(new THREE.Mesh(crack, crackMat));
   }
