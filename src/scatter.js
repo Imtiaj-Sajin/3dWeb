@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, roadDist } from './terrain.js';
+import { heightAt, roadDist, groundColorAt } from './terrain.js';
 import { fbm2 } from './noise.js';
 
 // ---------- geometry helpers ----------
@@ -125,30 +125,49 @@ function makePalm() {
 
 // ---------- grass ----------
 
+const BLADE_H = 0.6;
+
 function makeGrassTuft() {
-  const planes = [];
-  for (let i = 0; i < 3; i++) {
-    const p = new THREE.PlaneGeometry(0.2, 0.55, 1, 2);
-    p.translate(0, 0.275, 0);
-    p.rotateY((i / 3) * Math.PI);
-    planes.push(p);
+  const blades = [];
+  for (let i = 0; i < 4; i++) {
+    const p = new THREE.PlaneGeometry(0.13, BLADE_H, 1, 2);
+    p.translate(0, BLADE_H / 2, 0);
+    const pos = p.attributes.position;
+    for (let v = 0; v < pos.count; v++) {
+      const t = pos.getY(v) / BLADE_H; // 0 at base, 1 at tip
+      pos.setX(v, pos.getX(v) * (1 - t * 0.9)); // taper to a point
+      pos.setZ(v, pos.getZ(v) + t * t * 0.22); // curl outward
+    }
+    p.rotateY((i / 4) * Math.PI * 2 + i * 0.45);
+    blades.push(p);
   }
-  const g = merge(planes);
-  // vertical color gradient baked into vertex colors
-  const bottom = new THREE.Color('#8abd68');
-  const top = new THREE.Color('#b5da8c');
+  const g = merge(blades);
+
+  // vertex colors are a brightness gradient only — each tuft's real color
+  // comes from the terrain under it (per-instance tint), so grass always
+  // grows out of the ground color instead of floating on it
   const pos = g.attributes.position;
   const col = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
-    const t = THREE.MathUtils.clamp(pos.getY(i) / 0.55, 0, 1);
-    c.copy(bottom).lerp(top, t);
-    col[i * 3] = c.r;
-    col[i * 3 + 1] = c.g;
-    col[i * 3 + 2] = c.b;
+    const t = THREE.MathUtils.clamp(pos.getY(i) / BLADE_H, 0, 1);
+    col[i * 3] = 0.72 + t * 0.36;
+    col[i * 3 + 1] = 0.75 + t * 0.35;
+    col[i * 3 + 2] = 0.66 + t * 0.3;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g;
+}
+
+// approximate the Lambert-lit terrain color for unlit grass (sun + hemi on
+// a flat surface), so tufts visually match the ground they stand on
+const _lit = new THREE.Color();
+function litGroundColor(x, z) {
+  groundColorAt(x, z, _lit);
+  const jitter = 0.95 + Math.random() * 0.1;
+  _lit.r = Math.min(1, _lit.r * 1.7 * jitter);
+  _lit.g = Math.min(1, _lit.g * 1.75 * jitter);
+  _lit.b = Math.min(1, _lit.b * 1.6 * jitter);
+  return _lit;
 }
 
 function makeGrassMaterial(timeUniform) {
@@ -167,7 +186,7 @@ function makeGrassMaterial(timeUniform) {
       vec3 transformed = vec3( position );
       #ifdef USE_INSTANCING
         float swayPhase = instanceMatrix[3].x * 0.35 + instanceMatrix[3].z * 0.45;
-        float swayAmp = smoothstep(0.05, 0.55, position.y);
+        float swayAmp = smoothstep(0.05, 0.6, position.y);
         transformed.x += sin(uTime * 1.7 + swayPhase) * 0.09 * swayAmp;
         transformed.z += cos(uTime * 1.3 + swayPhase * 1.31) * 0.05 * swayAmp;
       #endif
@@ -204,8 +223,11 @@ function scatterInstanced(geo, material, tries, accept, opts = {}) {
     _s.setScalar(it.s);
     _m.compose(_p, _q, _s);
     mesh.setMatrixAt(i, _m);
-    const tint = 0.93 + Math.random() * 0.12;
-    mesh.setColorAt(i, _c.setScalar(tint));
+    if (opts.tintAt) {
+      mesh.setColorAt(i, opts.tintAt(it.x, it.z));
+    } else {
+      mesh.setColorAt(i, _c.setScalar(0.93 + Math.random() * 0.12));
+    }
   });
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -299,7 +321,7 @@ export function buildScatter({ isMobile }) {
       // avoid the sandy noise patches so grass sits on green
       return fbm2(x * 0.05 + 31, z * 0.05 + 17) < 0.45 || Math.random() < 0.2;
     },
-    { scale: () => 0.7 + Math.random() * 0.8 }
+    { scale: () => 0.6 + Math.random() * 0.6, tintAt: litGroundColor }
   );
   group.add(grass);
 

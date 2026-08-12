@@ -132,23 +132,42 @@ export function buildClouds() {
 
 // ---------- birds ----------
 
+function makeWingGeometry() {
+  // swept, tapered wing: hinge at x=0, tip trailing slightly back and out
+  const g = new THREE.BufferGeometry();
+  // prettier-ignore
+  const verts = new Float32Array([
+    0.0, 0, 0.14,   // leading root
+    0.0, 0, -0.1,   // trailing root
+    0.42, 0.02, -0.16, // mid trailing
+    0.0, 0, 0.14,
+    0.42, 0.02, -0.16,
+    0.62, 0.04, -0.3,  // swept tip
+  ]);
+  g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
 export function buildBirds() {
   const group = new THREE.Group();
   group.name = 'birds';
 
-  const mat = new THREE.MeshBasicMaterial({ color: '#2e3138', side: THREE.DoubleSide, fog: true });
-  const wingGeo = new THREE.PlaneGeometry(0.55, 0.22);
-  wingGeo.translate(0.27, 0, 0); // hinge at the body
+  const mat = new THREE.MeshBasicMaterial({ color: '#3a3f48', side: THREE.DoubleSide, fog: true });
 
-  // closed loop path high over the valley
+  const bodyGeo = new THREE.ConeGeometry(0.055, 0.4, 5);
+  bodyGeo.rotateX(Math.PI / 2); // point forward (+z)
+  const wingGeo = makeWingGeometry();
+
+  // closed loop path over the valley, below the cloud layer
   const pts = [];
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     pts.push(
       new THREE.Vector3(
-        Math.cos(a) * (40 + noise2(i, 1) * 18),
-        21 + noise2(i, 6) * 5,
-        Math.sin(a) * (48 + noise2(i, 3) * 18)
+        Math.cos(a) * (42 + noise2(i, 1) * 16),
+        17 + noise2(i, 6) * 3,
+        Math.sin(a) * (50 + noise2(i, 3) * 16)
       )
     );
   }
@@ -157,12 +176,14 @@ export function buildBirds() {
   const birds = [];
   for (let i = 0; i < 5; i++) {
     const bird = new THREE.Group();
-    const left = new THREE.Mesh(wingGeo, mat);
-    left.rotation.y = Math.PI; // mirror
+    const body = new THREE.Mesh(bodyGeo, mat);
     const right = new THREE.Mesh(wingGeo, mat);
-    bird.add(left, right);
+    const left = new THREE.Mesh(wingGeo, mat);
+    left.scale.x = -1; // mirror
+    bird.add(body, left, right);
+    bird.scale.setScalar(1.15);
     group.add(bird);
-    birds.push({ bird, left, right, t: i * 0.17, flap: i * 1.3 });
+    birds.push({ bird, left, right, t: (i * 0.13) % 1, phase: i * 1.7 });
   }
 
   const pos = new THREE.Vector3();
@@ -170,14 +191,17 @@ export function buildBirds() {
 
   function update(dt, elapsed) {
     for (const b of birds) {
-      b.t = (b.t + dt * 0.008) % 1;
+      b.t = (b.t + dt * 0.009) % 1;
       path.getPointAt(b.t, pos);
       path.getPointAt((b.t + 0.01) % 1, ahead);
       b.bird.position.copy(pos);
       b.bird.lookAt(ahead);
-      const flap = Math.sin(elapsed * 9 + b.flap) * 0.75;
-      b.left.rotation.z = flap;
-      b.right.rotation.z = -flap;
+
+      // flap in bursts, glide in between (wings held in a shallow V)
+      const gliding = Math.sin(elapsed * 0.55 + b.phase) < -0.25;
+      const flap = gliding ? 0.18 : Math.sin(elapsed * 8 + b.phase) * 0.55 + 0.1;
+      b.right.rotation.z = flap;
+      b.left.rotation.z = -flap;
     }
   }
 
