@@ -1,0 +1,15 @@
+# dependencies — the deploy machine installs its own
+node_modules/
+
+# build output — Vercel builds this itself
+dist/
+
+# local tooling / scratch
+.claude/
+.vercel/
+*.tmp.mjs
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
