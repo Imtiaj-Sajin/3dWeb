@@ -162,6 +162,62 @@ body {
   z-index: 16;
 }
 
+/* ---------- name tags ---------- */
+
+#tags {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.nametag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(46, 38, 24, 0.42);
+  color: #fff6e6;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  will-change: transform;
+  backdrop-filter: blur(2px);
+}
+
+.nametag.bot {
+  background: rgba(46, 38, 24, 0.26);
+  color: rgba(255, 246, 230, 0.78);
+  font-style: italic;
+}
+
+/* ---------- connection status ---------- */
+
+.status {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 15px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: #6b5a3c;
+  background: rgba(255, 250, 238, 0.7);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: 13;
+}
+
+.status.live,
+.status.warn {
+  opacity: 1;
+}
+
+.status.warn {
+  color: #8a5a35;
+}
+
 /* ---------- floating proximity prompt ---------- */
 
 .prompt {

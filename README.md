@@ -8,11 +8,45 @@ Built with [Three.js](https://threejs.org/) + [Vite](https://vitejs.dev/) — no
 
 ```bash
 npm install
-npm run dev      # opens on http://localhost:5173
+npm run dev      # game on http://localhost:5173
+npm run server   # multiplayer server on :8787 (optional, separate terminal)
 ```
 
-`npm run build` produces a static site in `dist/` you can host anywhere
-(Netlify, Vercel, GitHub Pages — no server needed).
+Open two browser windows on the dev URL and you will see each other.
+
+`npm run build` produces a static site in `dist/`. **The game runs fine with
+no server at all** — without one it falls back to local bots, so the published
+site is never broken by the socket server being down.
+
+## Multiplayer
+
+Ephemeral by design: nothing is stored, nothing is recovered. You are given a
+name and a character on arrival; when you close the tab you are gone.
+
+- `server/index.js` — one room, all in memory. Assigns a name (word + number)
+  and a model + tint, runs the shared bots, relays position at 10 Hz, and
+  drops anyone idle for 7 minutes (`IDLE_MS` to change).
+- `shared/world.js` — the handful of facts both the browser and the server
+  need (road curve, animation codes, name words). Dependency-free so Node can
+  import it directly and the two can never drift apart.
+- Only `x, z, heading, animation` go over the wire. **Y is never sent** — each
+  client derives ground height from the terrain function, which keeps packets
+  tiny and guarantees remote players' feet stay on the ground.
+- Bots are server-driven so everyone sees them in the same place. They walk
+  only the road lane, which is guaranteed clear of trees, so the server never
+  needs to know where any scenery is.
+- Birds, clouds and pollen are deliberately **not** synced. They are ambient;
+  nothing can be hidden behind a bird.
+
+Point the client at a server with `VITE_SERVER_URL`:
+
+```bash
+VITE_SERVER_URL=wss://your-host.example npm run build
+```
+
+Deployment note: browsers refuse plain `ws://` from an `https://` page, so in
+production the server must sit behind TLS (`wss://`). Caddy or nginx with
+Let's Encrypt, proxying to port 8787, is the usual way.
 
 ## Controls
 

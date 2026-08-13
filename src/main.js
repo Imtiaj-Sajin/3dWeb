@@ -10,6 +10,9 @@ import { Input } from './input.js';
 import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
 import { loadCharacterGLBs, createRig, Player, NPC, separateCharacters } from './characters.js';
+import { Net, serverUrl } from './net.js';
+import { RemoteCharacter, NameTags } from './remote.js';
+import { ANIM, MODELS } from '../shared/world.js';
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -91,21 +94,6 @@ const rig = new CameraRig(camera, colliders);
 let player = null;
 const npcs = [];
 
-// debug handle: inspect/teleport from the console, e.g.
-//   __wa.interactions.items.map(i => i.label)
-window.__wa = {
-  THREE,
-  interactions,
-  scene,
-  camera,
-  renderer,
-  npcs,
-  heightAt,
-  get player() {
-    return player;
-  },
-};
-
 const overlay = document.getElementById('overlay');
 const enterBtn = document.getElementById('enter-btn');
 const progressFill = document.getElementById('progress-fill');
@@ -116,6 +104,152 @@ const manager = new THREE.LoadingManager();
 manager.onProgress = (_url, loaded, total) => {
   progressFill.style.width = `${Math.round((loaded / total) * 100)}%`;
 };
+
+// ---------- multiplayer (optional) ----------
+
+const status = document.getElementById('status');
+const nameTags = new NameTags(camera, document.getElementById('tags'));
+const remotes = new Map(); // id -> RemoteCharacter
+let gltfByModel = null;
+let net = null;
+
+// debug handle: inspect/teleport from the console, e.g.
+//   __wa.interactions.items.map(i => i.label)
+// Declared after the state it exposes — a getter cannot rescue a const that
+// has not been initialised yet.
+window.__wa = {
+  THREE,
+  interactions,
+  scene,
+  camera,
+  renderer,
+  npcs,
+  heightAt,
+  remotes,
+  get net() {
+    return net;
+  },
+  get player() {
+    return player;
+  },
+};
+
+function setStatus(text, kind = '') {
+  status.textContent = text;
+  status.className = `status ${kind}`.trim();
+}
+
+function addRemote(info) {
+  if (remotes.has(info.id) || !gltfByModel) return;
+  const gltf = gltfByModel[info.model] ?? gltfByModel[MODELS[0]];
+  const rc = new RemoteCharacter(createRig(gltf), info);
+  remotes.set(info.id, rc);
+  scene.add(rc.root);
+  nameTags.add(info.id, info.name, info.bot);
+  interactions.add({
+    kind: 'greet',
+    label: 'say hi',
+    anchor: new THREE.Vector3(),
+    follow: rc,
+    remote: rc,
+    id: info.id,
+  });
+}
+
+function removeRemote(id) {
+  const rc = remotes.get(id);
+  if (!rc) return;
+  rc.dispose(scene);
+  remotes.delete(id);
+  nameTags.remove(id);
+  interactions.items = interactions.items.filter((it) => it.id !== id);
+}
+
+function playSolo(reason) {
+  // No server, or it went away: keep the world alive with local bots so the
+  // published site is never broken by a socket being down.
+  if (npcs.length || !gltfByModel) return;
+  const sources = [gltfByModel.Knight, gltfByModel.Barbarian, gltfByModel.Rogue];
+  sources.forEach((gltf, i) => {
+    const npc = new NPC(createRig(gltf), i * 7 + 3);
+    npcs.push(npc);
+    scene.add(npc.root);
+    interactions.add({
+      kind: 'greet',
+      label: 'say hi',
+      anchor: new THREE.Vector3(),
+      follow: npc,
+      npc,
+    });
+  });
+  if (reason) setStatus(reason, 'warn');
+}
+
+function connectOrPlaySolo() {
+  const url = serverUrl();
+  if (!url) {
+    playSolo('');
+    return;
+  }
+
+  net = new Net(url, {
+    onWelcome: (m) => {
+      // hand over from local bots to the shared world
+      for (const npc of npcs) scene.remove(npc.root);
+      npcs.length = 0;
+      interactions.items = interactions.items.filter((it) => !it.npc);
+      player.root.position.set(m.spawn.x, heightAt(m.spawn.x, m.spawn.z), m.spawn.z);
+      for (const who of m.others) addRemote(who);
+      setStatus(`you are ${m.you.name}`, 'live');
+    },
+    onJoin: (who) => {
+      addRemote(who);
+      setStatus(`${who.name} joined`, 'live');
+    },
+    onLeave: (id) => {
+      const name = remotes.get(id)?.name;
+      removeRemote(id);
+      if (name) setStatus(`${name} left`, 'live');
+    },
+    onSnapshot: (list) => {
+      for (const [id, x, z, h, a] of list) remotes.get(id)?.applySnapshot(x, z, h, a);
+    },
+    onEvent: (id, e) => remotes.get(id)?.playEvent(e),
+    onFail: () => playSolo(''),
+    onClose: (kicked) => {
+      for (const id of [...remotes.keys()]) removeRemote(id);
+      nameTags.clear();
+      playSolo(kicked === 'idle' ? 'you drifted off — reload to rejoin' : 'offline');
+    },
+  });
+  net.connect();
+  // if the server never answers, fall back so the loading state never sticks
+  setTimeout(() => {
+    if (!net.connected) playSolo('');
+  }, 4000);
+}
+
+// a hidden tab stops sending, which is how the server notices you left
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) input.keys.clear();
+});
+
+// which single integer describes what the player is doing right now
+function animCode(p) {
+  if (p.mode === 'resting' || p.mode === 'entering' || p.mode === 'leaving') {
+    const enter = p.rest?.clips?.enter ?? '';
+    if (enter.startsWith('Lie')) return ANIM.LIE;
+    if (enter.startsWith('Sit_Floor')) return ANIM.SIT_FLOOR;
+    return ANIM.SIT_CHAIR;
+  }
+  if (p.mode === 'emote') return ANIM.WAVE;
+  if (p.mode === 'interacting') return ANIM.INTERACT;
+  if (!p.grounded) return ANIM.JUMP;
+  const speed = p.velocity.length();
+  if (speed > 3.2) return ANIM.RUN;
+  if (speed > 0.3) return ANIM.WALK;
+  return ANIM.IDLE;
+}
 
 loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
   .then(([rogue, knight, barbarian]) => {
@@ -129,19 +263,8 @@ loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
     }
     scene.add(player.root);
 
-    const npcSources = [knight, barbarian, rogue];
-    npcSources.forEach((gltf, i) => {
-      const npc = new NPC(createRig(gltf), i * 7 + 3);
-      npcs.push(npc);
-      scene.add(npc.root);
-      interactions.add({
-        kind: 'greet',
-        label: 'say hi',
-        anchor: new THREE.Vector3(),
-        follow: npc, // the prompt tracks them as they wander
-        npc,
-      });
-    });
+    gltfByModel = { Rogue: rogue, Knight: knight, Barbarian: barbarian };
+    connectOrPlaySolo();
 
     progressFill.style.width = '100%';
     enterBtn.disabled = false;
@@ -211,9 +334,9 @@ renderer.setAnimationLoop(() => {
             player.beginRest(near);
           } else if (near.kind === 'greet') {
             player.wave();
-            // the one you greeted answers promptly; the loop below catches
-            // any other bystanders, who reply a beat later
-            near.npc.reactWave(player.root.position, 0.25);
+            // local bot: answer here. Networked: the server decides, so that
+            // everyone sees the same reply.
+            near.npc?.reactWave(player.root.position, 0.25);
           } else {
             player.interact(near);
           }
@@ -232,11 +355,20 @@ renderer.setAnimationLoop(() => {
           npc.reactWave(player.root.position, 0.35 + Math.random() * 0.5);
         }
       }
+      net?.sendEvent('wave');
     }
     for (const npc of npcs) npc.update(dt, colliders);
+    for (const rc of remotes.values()) rc.update(dt);
+
     // keep bodies out of each other before the camera reads the final pose
-    separateCharacters([player, ...npcs], colliders);
+    separateCharacters([player, ...npcs, ...remotes.values()], colliders);
+    nameTags.update(remotes.values());
     rig.update(dt, player, input);
+
+    if (net) {
+      const p = player.root.position;
+      net.sendState(p.x, p.z, player.heading, animCode(player), performance.now());
+    }
 
     // keep the shadow frustum centered on the player
     sun.position.copy(player.root.position).addScaledVector(SUN_DIR, 70);

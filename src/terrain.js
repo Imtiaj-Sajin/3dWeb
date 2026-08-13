@@ -4,6 +4,11 @@
 
 import * as THREE from 'three';
 import { fbm2, noise2 } from './noise.js';
+import { roadX } from '../shared/world.js';
+
+// re-exported so the rest of the client keeps importing it from here, while
+// the server imports the same definition straight from shared/
+export { roadX };
 
 const { smoothstep, lerp, clamp } = THREE.MathUtils;
 
@@ -12,11 +17,6 @@ export const TERRAIN_SIZE = 250;
 const SEGMENTS = 190;
 
 // ---------- road path ----------
-
-// Road runs roughly along the z axis with a gentle S-curve.
-export function roadX(z) {
-  return 10 * Math.sin(z * 0.021) + 5 * Math.sin(z * 0.011 + 2.1);
-}
 
 export function roadDist(x, z) {
   return Math.abs(x - roadX(z));
