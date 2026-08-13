@@ -162,6 +162,55 @@ body {
   z-index: 16;
 }
 
+/* ---------- floating proximity prompt ---------- */
+
+.prompt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px 6px 7px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 250, 238, 0.9);
+  color: #5b4a2f;
+  font-family: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 12;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  box-shadow: 0 3px 12px rgba(80, 60, 25, 0.22);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.prompt.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.prompt:hover,
+.prompt:active {
+  background: #fff;
+}
+
+.prompt-key {
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: #5b4a2f;
+  color: #fff8ea;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 /* ---------- wave button (touch) ---------- */
 
 .wave-btn {

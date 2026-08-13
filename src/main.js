@@ -6,6 +6,7 @@ import { buildSky, buildClouds, buildBirds } from './sky.js';
 import { buildScatter } from './scatter.js';
 import { buildProps } from './props.js';
 import { Input } from './input.js';
+import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
 import { loadCharacterGLBs, createRig, Player, NPC } from './characters.js';
 
@@ -67,6 +68,15 @@ scene.add(scatter.group);
 
 const colliders = [...scatter.colliders, ...props.colliders];
 
+const interactions = new Interactions(camera, document.getElementById('prompt'));
+for (const item of [...props.interactables, ...scatter.interactables]) {
+  interactions.add(item);
+}
+
+// debug handle: inspect/teleport from the console, e.g.
+//   __wa.interactions.items.map(i => i.label)
+window.__wa = { interactions, scene, get player() { return player; } };
+
 // ---------- characters ----------
 
 const input = new Input();
@@ -121,7 +131,7 @@ enterBtn.addEventListener('click', () => {
   input.enable();
   hint.textContent = input.isTouch
     ? 'drag anywhere to walk · 👋 to wave'
-    : 'WASD to walk · shift to run · space to jump · E to wave';
+    : 'WASD move · shift run · space jump · E interact · Q wave';
   hint.classList.remove('hidden');
   setTimeout(() => hint.classList.add('hidden'), 7000);
 });
@@ -137,6 +147,7 @@ window.addEventListener('resize', () => {
 // ---------- loop ----------
 
 const clock = new THREE.Clock();
+const _promptAnchor = new THREE.Vector3();
 let elapsed = 0;
 
 renderer.setAnimationLoop(() => {
@@ -150,6 +161,32 @@ renderer.setAnimationLoop(() => {
 
   if (player) {
     player.update(dt, input, rig.yaw, colliders);
+
+    // proximity prompt + contextual action (E key, or click/tap the prompt)
+    const pressed = input.consumeAction() || interactions.consumeClick();
+    if (!input.enabled) {
+      interactions.hide(); // still on the title screen
+    } else if (player.isResting) {
+      _promptAnchor.copy(player.root.position).y += 1.5;
+      interactions.show(_promptAnchor, 'stand up', !input.isTouch);
+      if (pressed) player.standUp();
+    } else if (player.busy) {
+      interactions.hide();
+    } else {
+      const near = interactions.nearest(player.root.position);
+      if (near) {
+        interactions.show(near.anchor, near.label, !input.isTouch);
+        if (pressed) {
+          if (near.kind === 'rest') player.beginRest(near);
+          else player.interact(near);
+        }
+      } else {
+        interactions.hide();
+        if (pressed) player.wave(); // nothing nearby — E just waves
+      }
+    }
+    if (input.consumeWave()) player.wave(); // touch 👋 button always waves
+
     if (player.justWaved) {
       // nearby NPCs pause, turn, and wave back after a beat
       for (const npc of npcs) {

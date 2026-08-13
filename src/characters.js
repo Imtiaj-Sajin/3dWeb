@@ -157,12 +157,110 @@ export class Player extends AnimatedCharacter {
     this.root.position.set(roadX(30), heightAt(roadX(30), 30), 30);
     this.heading = Math.PI; // face down the road (toward -z)
     this.root.rotation.y = this.heading;
-    this.emoteTimer = 0;
+    // mode: free | emote | interacting | entering | resting | leaving
+    this.mode = 'free';
+    this.modeTimer = 0;
+    this.rest = null;
+    this.faceTarget = null;
     this.justWaved = false;
     this.play('Idle', 0);
   }
 
+  get busy() {
+    return this.mode !== 'free';
+  }
+
+  get isResting() {
+    return this.mode === 'resting';
+  }
+
+  wave() {
+    if (this.mode !== 'free' || !this.grounded) return;
+    this.mode = 'emote';
+    this.modeTimer = this.emoteDuration('Cheer') - 0.15;
+    this.velocity.set(0, 0);
+    this.play('Cheer', 0.2, true);
+    this.justWaved = true;
+  }
+
+  // one-shot reach-out gesture, turning to face the object
+  interact(item) {
+    if (this.mode !== 'free' || !this.grounded) return;
+    this.mode = 'interacting';
+    this.modeTimer = this.emoteDuration('Interact', 1.2);
+    this.velocity.set(0, 0);
+    this.faceTarget = Math.atan2(
+      item.anchor.x - this.root.position.x,
+      item.anchor.z - this.root.position.z
+    );
+    this.play('Interact', 0.2, true);
+  }
+
+  // sit on a bench / on the grass / lie down: snap to the spot, play the
+  // enter clip, then hold the looping idle until the player stands up
+  beginRest(item) {
+    if (this.mode !== 'free' || !this.grounded) return;
+    this.rest = item;
+    this.mode = 'entering';
+    this.modeTimer = this.emoteDuration(item.clips.enter, 1);
+    this.velocity.set(0, 0);
+    this.root.position.set(item.spot.x, heightAt(item.spot.x, item.spot.z), item.spot.z);
+    this.heading = item.facing;
+    this.root.rotation.y = this.heading;
+    this.play(item.clips.enter, 0.25, true);
+  }
+
+  standUp() {
+    if (this.mode !== 'resting') return;
+    this.mode = 'leaving';
+    this.modeTimer = this.emoteDuration(this.rest.clips.exit, 1);
+    this.play(this.rest.clips.exit, 0.2, true);
+  }
+
   update(dt, input, cameraYaw, colliders) {
+    this.justWaved = false;
+
+    // --- locked modes: sitting, waving, interacting ---
+    if (this.mode !== 'free') {
+      this.modeTimer -= dt;
+
+      if (this.faceTarget !== null) {
+        this.heading = angleLerp(this.heading, this.faceTarget, damp(8, dt));
+        this.root.rotation.y = this.heading;
+      }
+
+      // walking away cancels a standing gesture (but never a sit — you must
+      // stand up, which keeps the seated pose from sliding around)
+      const walkingAway =
+        input.magnitude > 0.4 && (this.mode === 'emote' || this.mode === 'interacting');
+
+      if (walkingAway) {
+        this.mode = 'free';
+        this.faceTarget = null;
+      } else if (this.mode === 'resting') {
+        this.modeTimer = 1; // held until standUp()
+      } else if (this.modeTimer <= 0) {
+        if (this.mode === 'entering') {
+          this.mode = 'resting';
+          this.play(this.rest.clips.idle, 0.3);
+        } else if (this.mode === 'leaving') {
+          this.mode = 'free';
+          this.rest = null;
+          this.play('Idle', 0.25);
+        } else {
+          this.mode = 'free';
+          this.faceTarget = null;
+          this.play('Idle', 0.3);
+        }
+      }
+
+      if (this.mode !== 'free') {
+        this.applyGround(dt);
+        this.mixer.update(dt);
+        return;
+      }
+    }
+
     // input is screen-relative; rotate into world by camera yaw
     const ix = input.moveX;
     const iy = input.moveY;
@@ -206,23 +304,9 @@ export class Player extends AnimatedCharacter {
       this.root.rotation.y = this.heading;
     }
 
-    // wave emote (E key / touch button) — only while standing still
-    this.justWaved = false;
-    if (input.consumeWave() && this.grounded && speed < 1 && this.emoteTimer <= 0) {
-      this.emoteTimer = this.emoteDuration('Cheer') - 0.15;
-      this.play('Cheer', 0.2, true);
-      this.justWaved = true;
-    }
-    if (this.emoteTimer > 0) {
-      this.emoteTimer -= dt;
-      if (speed > 1 || !this.grounded) this.emoteTimer = 0; // moving cancels it
-    }
-
     // animation state
     if (!this.grounded) {
       this.play('Jump_Idle', 0.15);
-    } else if (this.emoteTimer > 0) {
-      // let the wave play out
     } else if (speed > 3.2) {
       this.play('Running_A');
     } else if (speed > 0.3) {

@@ -39,6 +39,7 @@ export function buildProps() {
   const group = new THREE.Group();
   group.name = 'props';
   const colliders = [];
+  const interactables = [];
 
   // ---------- power poles + wires ----------
 
@@ -120,6 +121,11 @@ export function buildProps() {
     g.translate(x, y, z);
     lampParts.push(g);
     colliders.push({ x, z, r: 0.3 });
+    interactables.push({
+      kind: 'touch',
+      label: 'touch',
+      anchor: new THREE.Vector3(x, y + 1.5, z),
+    });
   }
   const lamps = new THREE.Mesh(merge(lampParts), woodMat());
   lamps.castShadow = true;
@@ -163,6 +169,15 @@ export function buildProps() {
     }
     g.translate(x, y - 0.02, z);
     colliders.push({ x, z, r: 1.0 });
+
+    interactables.push({
+      kind: 'rest',
+      label: 'sit',
+      anchor: new THREE.Vector3(x, y + 1.5, z),
+      spot: { x, z },
+      facing: rotY, // model forward is +z, which the bench faces toward the road
+      clips: { enter: 'Sit_Chair_Down', idle: 'Sit_Chair_Idle', exit: 'Sit_Chair_StandUp' },
+    });
     return g;
   }
 
@@ -189,6 +204,11 @@ export function buildProps() {
     g.rotateY(rotY);
     g.translate(x, y, z);
     colliders.push({ x, z, r: 1.3 });
+    interactables.push({
+      kind: 'touch',
+      label: 'touch',
+      anchor: new THREE.Vector3(x, y + 1.4, z),
+    });
     return g;
   }
 
@@ -200,5 +220,5 @@ export function buildProps() {
   woodwork.receiveShadow = true;
   group.add(woodwork);
 
-  return { group, colliders };
+  return { group, colliders, interactables };
 }

@@ -10,6 +10,7 @@ export class Input {
     this.magnitude = 0;
     this.running = false;
     this.jumpQueued = false;
+    this.actionQueued = false;
     this.waveQueued = false;
     this.pointerX = 0; // -1..1
     this.pointerY = 0;
@@ -33,7 +34,10 @@ export class Input {
         this.jumpQueued = true;
         e.preventDefault();
       }
-      if (e.code === 'KeyE') this.waveQueued = true;
+      // E is contextual: use a nearby interactable, or wave if there is none.
+      // Q always waves, so you can greet someone while standing by a bench.
+      if (e.code === 'KeyE') this.actionQueued = true;
+      if (e.code === 'KeyQ') this.waveQueued = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -118,6 +122,12 @@ export class Input {
     if (this._waveBtn) this._waveBtn.classList.add('show');
   }
 
+  consumeAction() {
+    const a = this.actionQueued;
+    this.actionQueued = false;
+    return a;
+  }
+
   consumeWave() {
     const w = this.waveQueued;
     this.waveQueued = false;
@@ -134,6 +144,7 @@ export class Input {
     if (!this.enabled) {
       this.moveX = this.moveY = this.magnitude = 0;
       this.jumpQueued = false;
+      this.actionQueued = false;
       this.waveQueued = false;
       return;
     }

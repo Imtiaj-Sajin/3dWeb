@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, roadDist, groundColorAt } from './terrain.js';
+import { heightAt, roadDist, roadX, groundColorAt } from './terrain.js';
 import { fbm2 } from './noise.js';
 
 // ---------- geometry helpers ----------
@@ -238,6 +238,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
   const group = new THREE.Group();
   group.name = 'scatter';
   const colliders = [];
+  const interactables = [];
   const timeUniform = { value: 0 };
 
   // keep scattered things away from hand-placed props (benches, poles...)
@@ -304,6 +305,18 @@ export function buildScatter({ isMobile, avoid = [] }) {
     b.receiveShadow = true;
     group.add(b);
     colliders.push({ x: bx, z: bz, r: bs * 1.05 });
+
+    // sit on the grass with your back to the rock, looking toward the road
+    const toRoad = Math.sign(roadX(bz) - bx) || 1;
+    const sx = bx + toRoad * (bs * 1.05 + 0.55);
+    interactables.push({
+      kind: 'rest',
+      label: 'sit',
+      anchor: new THREE.Vector3(sx, heightAt(sx, bz) + 1.4, bz),
+      spot: { x: sx, z: bz },
+      facing: toRoad > 0 ? Math.PI / 2 : -Math.PI / 2,
+      clips: { enter: 'Sit_Floor_Down', idle: 'Sit_Floor_Idle', exit: 'Sit_Floor_StandUp' },
+    });
   }
 
   // --- palms on the dunes ---
@@ -316,6 +329,18 @@ export function buildScatter({ isMobile, avoid = [] }) {
     palm.castShadow = true;
     group.add(palm);
     colliders.push({ x: px, z: pz, r: 0.5 });
+
+    // lie down in the shade and watch the clouds drift
+    const toRoad = Math.sign(roadX(pz) - px) || 1;
+    const lx = px + toRoad * 1.5;
+    interactables.push({
+      kind: 'rest',
+      label: 'lie down',
+      anchor: new THREE.Vector3(lx, heightAt(lx, pz) + 1.4, pz),
+      spot: { x: lx, z: pz },
+      facing: toRoad > 0 ? Math.PI / 2 : -Math.PI / 2,
+      clips: { enter: 'Lie_Down', idle: 'Lie_Idle', exit: 'Lie_StandUp' },
+    });
   }
 
   // --- grass ---
@@ -335,5 +360,5 @@ export function buildScatter({ isMobile, avoid = [] }) {
   );
   group.add(grass);
 
-  return { group, colliders, timeUniform };
+  return { group, colliders, interactables, timeUniform };
 }
