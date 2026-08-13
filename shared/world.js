@@ -44,19 +44,39 @@ export const ANIM_CLIP = {
 
 export const MODELS = ['Rogue', 'Knight', 'Barbarian', 'Mage', 'Rogue_Hooded'];
 
-// The only clips the game plays. KayKit ships 76 per character — mostly
-// combat — and the rest are stripped at prep time, which is what makes each
-// model small enough to fetch on demand.
-// KEEP THIS IN SYNC with any new animation you start playing, or the clip
-// will be missing from the shipped models.
+// Clips kept in the shipped models. KayKit ships 76 per character; the ones
+// left out are duplicates and static reference poses (T-Pose, *_Pose, the
+// dual-wield and strafe variants) that nothing is likely to want.
+//
+// KEEP THIS IN SYNC with any animation you intend to play. A clip missing
+// from this list is missing from the shipped model, and prep-characters.mjs
+// fails loudly if a listed clip does not exist.
 export const USED_CLIPS = [
+  // --- movement and idling ---
   'Idle',
+  'Unarmed_Idle',
   'Walking_A',
   'Walking_B',
+  'Walking_C',
+  'Walking_Backwards',
   'Running_A',
+  'Running_B',
+  'Jump_Start',
   'Jump_Idle',
+  'Jump_Land',
+  'Dodge_Forward',
+  'Dodge_Backward',
+  'Dodge_Left',
+  'Dodge_Right',
+
+  // --- social ---
   'Cheer',
   'Interact',
+  'PickUp',
+  'Throw',
+  'Use_Item',
+
+  // --- resting ---
   'Sit_Chair_Down',
   'Sit_Chair_Idle',
   'Sit_Chair_StandUp',
@@ -66,6 +86,48 @@ export const USED_CLIPS = [
   'Lie_Down',
   'Lie_Idle',
   'Lie_StandUp',
+
+  // --- combat: one-handed ---
+  '1H_Melee_Attack_Chop',
+  '1H_Melee_Attack_Slice_Diagonal',
+  '1H_Melee_Attack_Slice_Horizontal',
+  '1H_Melee_Attack_Stab',
+
+  // --- combat: two-handed ---
+  '2H_Melee_Idle',
+  '2H_Melee_Attack_Chop',
+  '2H_Melee_Attack_Slice',
+  '2H_Melee_Attack_Spin',
+  '2H_Melee_Attack_Stab',
+
+  // --- combat: ranged ---
+  '1H_Ranged_Aiming',
+  '1H_Ranged_Shoot',
+  '1H_Ranged_Reload',
+  '2H_Ranged_Aiming',
+  '2H_Ranged_Shoot',
+  '2H_Ranged_Reload',
+
+  // --- combat: unarmed ---
+  'Unarmed_Melee_Attack_Punch_A',
+  'Unarmed_Melee_Attack_Punch_B',
+  'Unarmed_Melee_Attack_Kick',
+
+  // --- combat: casting (staff and wand) ---
+  'Spellcast_Raise',
+  'Spellcast_Shoot',
+  'Spellcasting',
+  'Spellcast_Long',
+
+  // --- defence and consequences ---
+  'Block',
+  'Blocking',
+  'Block_Attack',
+  'Block_Hit',
+  'Hit_A',
+  'Hit_B',
+  'Death_A',
+  'Death_B',
 ];
 
 // Held items ship rigged to the characters' hand bones, so carrying one is
