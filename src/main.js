@@ -65,9 +65,6 @@ scene.add(pollen.points);
 const clouds = buildClouds();
 scene.add(clouds.group);
 
-const birds = buildBirds();
-scene.add(birds.group);
-
 const props = buildProps();
 scene.add(props.group);
 
@@ -75,6 +72,10 @@ const scatter = buildScatter({ isMobile, avoid: props.colliders });
 scene.add(scatter.group);
 
 const colliders = [...scatter.colliders, ...props.colliders];
+
+// built last: the flock steers around whatever is already in the world
+const birds = buildBirds({ obstacles: colliders });
+scene.add(birds.group);
 
 const interactions = new Interactions(camera, document.getElementById('prompt'));
 for (const item of [...props.interactables, ...scatter.interactables]) {
@@ -99,6 +100,7 @@ window.__wa = {
   camera,
   renderer,
   npcs,
+  heightAt,
   get player() {
     return player;
   },
