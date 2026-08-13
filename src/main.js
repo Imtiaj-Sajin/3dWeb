@@ -73,18 +73,6 @@ for (const item of [...props.interactables, ...scatter.interactables]) {
   interactions.add(item);
 }
 
-// debug handle: inspect/teleport from the console, e.g.
-//   __wa.interactions.items.map(i => i.label)
-window.__wa = {
-  THREE,
-  interactions,
-  scene,
-  camera,
-  renderer,
-  get player() {
-    return player;
-  },
-};
 
 // ---------- characters ----------
 
@@ -93,6 +81,20 @@ const rig = new CameraRig(camera);
 
 let player = null;
 const npcs = [];
+
+// debug handle: inspect/teleport from the console, e.g.
+//   __wa.interactions.items.map(i => i.label)
+window.__wa = {
+  THREE,
+  interactions,
+  scene,
+  camera,
+  renderer,
+  npcs,
+  get player() {
+    return player;
+  },
+};
 
 const overlay = document.getElementById('overlay');
 const enterBtn = document.getElementById('enter-btn');
@@ -122,6 +124,13 @@ loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
       const npc = new NPC(createRig(gltf), i * 7 + 3);
       npcs.push(npc);
       scene.add(npc.root);
+      interactions.add({
+        kind: 'greet',
+        label: 'say hi',
+        anchor: new THREE.Vector3(),
+        follow: npc, // the prompt tracks them as they wander
+        npc,
+      });
     });
 
     progressFill.style.width = '100%';
@@ -173,6 +182,7 @@ renderer.setAnimationLoop(() => {
 
     // proximity prompt + contextual action (E key, or click/tap the prompt)
     const pressed = input.consumeAction() || interactions.consumeClick();
+    interactions.sync(); // NPC prompts follow them around
     if (!input.enabled) {
       interactions.hide(); // still on the title screen
     } else if (player.isResting) {
@@ -186,8 +196,16 @@ renderer.setAnimationLoop(() => {
       if (near) {
         interactions.show(near.anchor, near.label, !input.isTouch);
         if (pressed) {
-          if (near.kind === 'rest') player.beginRest(near);
-          else player.interact(near);
+          if (near.kind === 'rest') {
+            player.beginRest(near);
+          } else if (near.kind === 'greet') {
+            player.wave();
+            // the one you greeted answers promptly; the loop below catches
+            // any other bystanders, who reply a beat later
+            near.npc.reactWave(player.root.position, 0.25);
+          } else {
+            player.interact(near);
+          }
         }
       } else {
         interactions.hide();

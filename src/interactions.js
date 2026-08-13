@@ -38,6 +38,15 @@ export class Interactions {
     return c;
   }
 
+  // items attached to something that moves (NPCs) refresh their anchor here
+  sync() {
+    for (const it of this.items) {
+      if (!it.follow) continue;
+      const p = it.follow.root.position;
+      it.anchor.set(p.x, p.y + (it.followHeight ?? 1.85), p.z);
+    }
+  }
+
   nearest(pos, maxDist = 3.2) {
     let best = null;
     let bestD = maxDist;

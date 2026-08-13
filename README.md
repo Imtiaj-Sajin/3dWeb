@@ -19,8 +19,21 @@ npm run dev      # opens on http://localhost:5173
 - **WASD / arrow keys** — walk
 - **Shift** — run
 - **Space** — jump
+- **E** — contextual action: use whatever the floating prompt is pointing at
+  (sit on a bench, lie down under a palm, touch a lamp, say hi to someone).
+  With nothing nearby, it waves.
+- **Q** — wave, always
 - **Mouse** — subtle camera tilt
-- **Touch** — drag anywhere for a floating joystick
+- **Touch** — drag anywhere for a floating joystick; 👋 button to wave; tap the
+  floating prompt to use it
+
+Walk close to a bench, boulder, palm, street lamp, barrier, or another
+character and a prompt appears above it saying what E will do. Greeting someone
+makes them stop, turn to face you, and wave back.
+
+Debug helpers: `?x=&z=` URL params teleport the player (`?z=-52` lands at the
+benches), and `__wa` in the browser console exposes the scene, player, NPCs, and
+the interactable list.
 
 ## How it works
 
