@@ -18,7 +18,7 @@ import {
   NPC,
   separateCharacters,
 } from './characters.js';
-import { Net, serverUrl } from './net.js';
+import { Net, serverCandidates, LIVE_SERVER } from './net.js';
 import { RemoteCharacter, NameTags } from './remote.js';
 import {
   ANIM,
@@ -341,13 +341,21 @@ function connectOrPlaySolo() {
   // Offline you still get a look of your own, just a locally chosen one.
   setPlayerLook(pickLook());
 
-  const url = serverUrl();
-  if (!url) {
+  const urls = serverCandidates();
+  if (!urls.length) {
     playSolo('');
     return;
   }
 
-  net = new Net(url, {
+  net = new Net(urls, {
+    onTrying: (url) => {
+      setStatus(url === LIVE_SERVER ? 'connecting…' : 'trying local server…', 'live');
+    },
+    onWaking: (url) => {
+      // free hosting sleeps when nobody is around; say so rather than
+      // leaving the player staring at nothing
+      if (url === LIVE_SERVER) setStatus('waking the server, one moment…', 'warn');
+    },
     onWelcome: (m) => {
       // hand over from local bots to the shared world
       for (const npc of npcs) scene.remove(npc.root);
@@ -421,7 +429,7 @@ function connectOrPlaySolo() {
         })
         .catch((err) => console.error(`could not load model ${look.model}:`, err));
     },
-    onFail: () => playSolo(''),
+    onFail: () => playSolo('no server reachable — walking alone'),
     onClose: (kicked) => {
       for (const id of [...remotes.keys()]) removeRemote(id);
       nameTags.clear();
@@ -431,11 +439,9 @@ function connectOrPlaySolo() {
       playSolo(kicked === 'idle' ? 'you drifted off — reload to rejoin' : 'offline');
     },
   });
+  // Net walks the candidate list itself and calls onFail once they are all
+  // exhausted, so there is no separate timer here to cut it short.
   net.connect();
-  // if the server never answers, fall back so the loading state never sticks
-  setTimeout(() => {
-    if (!net.connected) playSolo('');
-  }, 4000);
 }
 
 // a hidden tab stops sending, which is how the server notices you left

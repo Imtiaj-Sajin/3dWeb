@@ -38,15 +38,29 @@ name and a character on arrival; when you close the tab you are gone.
 - Birds, clouds and pollen are deliberately **not** synced. They are ambient;
   nothing can be hidden behind a bird.
 
-Point the client at a server with `VITE_SERVER_URL`:
+### Which server the client uses
 
-```bash
-VITE_SERVER_URL=wss://your-host.example npm run build
-```
+`serverCandidates()` in `src/net.js` tries these in order, stopping at the
+first that answers:
 
-Deployment note: browsers refuse plain `ws://` from an `https://` page, so in
-production the server must sit behind TLS (`wss://`). Caddy or nginx with
-Let's Encrypt, proxying to port 8787, is the usual way.
+1. `?server=ws://host:port` in the URL — aims one tab at one room, no rebuild
+2. `VITE_SERVER_URL` if set at build time
+3. **the hosted room** (`LIVE_SERVER`) — `wss://threedwebbackend.onrender.com`
+4. `ws://localhost:8787`, only when the page itself is on localhost
+
+If none answer, the game falls back to solo with local bots rather than
+failing. Candidates before the last get a short window (6s); the last gets a
+long one, because a free Render instance sleeps when idle and can take most
+of a minute to wake — the player sees "waking the server, one moment…" rather
+than an unexplained pause.
+
+Note this order means that while developing, you connect to the **hosted**
+room by default even with a local server running. Use
+`?server=ws://localhost:8787` to force the local one.
+
+Deployment note: browsers refuse plain `ws://` from an `https://` page, so the
+server must sit behind TLS. Render provides that; on a plain VPS use Caddy or
+nginx with Let's Encrypt proxying to port 8787.
 
 ## Controls
 

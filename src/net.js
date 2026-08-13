@@ -6,25 +6,41 @@
 
 const RATE_MS = 100; // match the server tick — 10 updates a second
 
-export function serverUrl() {
-  // ?server=ws://host:port — point a tab at a different room without a rebuild
+// The hosted room. Free Render instances sleep when idle, so the first
+// connection after a quiet spell has to wait for it to wake up.
+export const LIVE_SERVER = 'wss://threedwebbackend.onrender.com';
+const LOCAL_SERVER_PORT = 8787;
+
+// How long to wait on each candidate before moving on. The last one gets a
+// long budget because there is nothing to fall back to, and a sleeping Render
+// instance genuinely can take the better part of a minute to answer.
+const QUICK_TRY_MS = 6000;
+const LAST_TRY_MS = 75000;
+const WAKING_AFTER_MS = 2500; // when to admit we are waiting on a cold start
+
+// Servers to try, best first.
+export function serverCandidates() {
+  // ?server=ws://host:port — point a tab at one specific room, no rebuild
   const override = new URLSearchParams(location.search).get('server');
-  if (override) return override;
+  if (override) return [override];
 
   const configured = import.meta.env.VITE_SERVER_URL;
-  if (configured) return configured;
-  // during local dev, assume the server is running alongside vite
+  if (configured) return [configured];
+
+  const list = [LIVE_SERVER];
+  // during local dev, fall back to a server running alongside vite
   if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    return `ws://${location.hostname}:8787`;
+    list.push(`ws://${location.hostname}:${LOCAL_SERVER_PORT}`);
   }
-  return null; // deployed with no server configured -> solo
+  return list;
 }
 
 export class Net {
-  constructor(url, handlers = {}) {
-    this.url = url;
+  constructor(urls, handlers = {}) {
+    this.urls = Array.isArray(urls) ? urls.filter(Boolean) : [urls].filter(Boolean);
     this.h = handlers;
     this.ws = null;
+    this.url = null;
     this.connected = false;
     this.you = null;
     this.kicked = false;
@@ -33,17 +49,60 @@ export class Net {
   }
 
   connect() {
-    if (!this.url) return;
+    this._try(0);
+  }
+
+  // Walk the candidate list until one answers. A candidate that fails or goes
+  // quiet is abandoned and we move on; once a socket is open we stop trying
+  // others, and any later close is a real disconnect rather than a fallback.
+  _try(index) {
+    if (index >= this.urls.length) {
+      this.h.onFail?.();
+      return;
+    }
+    const url = this.urls[index];
+    const isLast = index === this.urls.length - 1;
+    this.url = url;
+
     let ws;
     try {
-      ws = new WebSocket(this.url);
+      ws = new WebSocket(url);
     } catch {
-      this.h.onFail?.();
+      this._try(index + 1);
       return;
     }
     this.ws = ws;
 
+    let settled = false;
+    const giveUp = (why) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(budget);
+      clearTimeout(waking);
+      try {
+        ws.close();
+      } catch {
+        /* already gone */
+      }
+      this.h.onGiveUp?.(url, why, isLast);
+      this._try(index + 1);
+    };
+
+    const budget = setTimeout(
+      () => giveUp('timeout'),
+      isLast ? LAST_TRY_MS : QUICK_TRY_MS
+    );
+    // a slow answer usually means a sleeping free instance, not a broken one
+    const waking = setTimeout(() => {
+      if (!settled) this.h.onWaking?.(url);
+    }, WAKING_AFTER_MS);
+
+    this.h.onTrying?.(url, index, this.urls.length);
+
     ws.onopen = () => {
+      settled = true;
+      clearTimeout(budget);
+      clearTimeout(waking);
       this.connected = true;
     };
 
@@ -101,12 +160,14 @@ export class Net {
     ws.onclose = () => {
       const wasConnected = this.connected;
       this.connected = false;
+      // closing before we ever got in means this candidate is no good; after
+      // we were in, it is a genuine disconnect
       if (wasConnected) this.h.onClose?.(this.kicked);
-      else this.h.onFail?.();
+      else giveUp('closed');
     };
 
     ws.onerror = () => {
-      if (!this.connected) this.h.onFail?.();
+      if (!this.connected) giveUp('error');
     };
   }
 
