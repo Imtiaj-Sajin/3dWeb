@@ -52,6 +52,23 @@ export class RemoteCharacter {
     return true;
   }
 
+  // Someone changed their look at the showroom. Rebuild onto the new model
+  // but keep them exactly where they are, so they never pop across the map.
+  swapRig(rig, info) {
+    const oldRoot = this.root;
+    rig.root.position.copy(oldRoot.position);
+    rig.root.rotation.copy(oldRoot.rotation);
+    this.mixer.stopAllAction();
+
+    this.root = rig.root;
+    this.mixer = rig.mixer;
+    this.actions = rig.actions;
+    this.current = null;
+    applyLook(this.root, info);
+    this.play(ANIM_CLIP[this.anim] ?? 'Idle', 0);
+    return oldRoot;
+  }
+
   play(name, fade = 0.22, once = false) {
     if (this.current === name || !this.actions[name]) return;
     const next = this.actions[name];

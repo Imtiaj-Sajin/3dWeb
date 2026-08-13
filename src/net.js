@@ -71,6 +71,9 @@ export class Net {
         case 'ev':
           this.h.onEvent?.(m.id, m.e);
           break;
+        case 'look':
+          this.h.onLook?.(m.id, m.look);
+          break;
         case 'idle':
           this.kicked = 'idle';
           break;
@@ -118,6 +121,12 @@ export class Net {
   sendEvent(e) {
     if (!this.connected) return;
     this.ws.send(JSON.stringify({ t: 'ev', e }));
+  }
+
+  // sent only when you actually change something at the showroom
+  sendLook(look) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ t: 'look', look }));
   }
 
   // called when the tab is hidden so the server can time the player out

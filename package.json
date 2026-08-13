@@ -7,13 +7,16 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "prep:characters": "node scripts/prep-characters.mjs"
   },
   "dependencies": {
     "three": "^0.172.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "vite": "^6.3.5"
   }
 }

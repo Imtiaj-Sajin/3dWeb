@@ -42,7 +42,75 @@ export const ANIM_CLIP = {
   [ANIM.INTERACT]: 'Interact',
 };
 
-export const MODELS = ['Rogue', 'Knight', 'Barbarian'];
+export const MODELS = ['Rogue', 'Knight', 'Barbarian', 'Mage', 'Rogue_Hooded'];
+
+// The only clips the game plays. KayKit ships 76 per character — mostly
+// combat — and the rest are stripped at prep time, which is what makes each
+// model small enough to fetch on demand.
+// KEEP THIS IN SYNC with any new animation you start playing, or the clip
+// will be missing from the shipped models.
+export const USED_CLIPS = [
+  'Idle',
+  'Walking_A',
+  'Walking_B',
+  'Running_A',
+  'Jump_Idle',
+  'Cheer',
+  'Interact',
+  'Sit_Chair_Down',
+  'Sit_Chair_Idle',
+  'Sit_Chair_StandUp',
+  'Sit_Floor_Down',
+  'Sit_Floor_Idle',
+  'Sit_Floor_StandUp',
+  'Lie_Down',
+  'Lie_Idle',
+  'Lie_StandUp',
+];
+
+// Held items ship rigged to the characters' hand bones, so carrying one is
+// just a matter of making that node visible. Everyone starts empty-handed.
+export const HELD_ITEM = /sword|dagger|knife|axe|crossbow|shield|arrow|quiver|staff|wand|bow|spellbook|mug|throwable/i;
+
+// What each character can pick up at the showroom. Node names come straight
+// from the model, so they must match exactly. Offhand duplicates (the second
+// copy used for dual wielding) are left out.
+export const ITEMS = {
+  Rogue: [
+    { node: 'Knife', label: 'knife' },
+    { node: '1H_Crossbow', label: 'crossbow' },
+    { node: '2H_Crossbow', label: 'big crossbow' },
+    { node: 'Throwable', label: 'smoke bomb' },
+  ],
+  Rogue_Hooded: [
+    { node: 'Knife', label: 'knife' },
+    { node: '1H_Crossbow', label: 'crossbow' },
+    { node: '2H_Crossbow', label: 'big crossbow' },
+    { node: 'Throwable', label: 'smoke bomb' },
+  ],
+  Knight: [
+    { node: 'Round_Shield', label: 'round shield' },
+    { node: 'Badge_Shield', label: 'badge shield' },
+    { node: 'Spike_Shield', label: 'spiked shield' },
+    { node: 'Rectangle_Shield', label: 'tower shield' },
+    { node: '1H_Sword', label: 'sword' },
+    { node: '2H_Sword', label: 'greatsword' },
+  ],
+  Barbarian: [
+    { node: 'Mug', label: 'mug' },
+    { node: '1H_Axe', label: 'axe' },
+    { node: '2H_Axe', label: 'great axe' },
+    { node: 'Barbarian_Round_Shield', label: 'shield' },
+  ],
+  Mage: [
+    { node: '2H_Staff', label: 'staff' },
+    { node: '1H_Wand', label: 'wand' },
+    { node: 'Spellbook', label: 'spellbook' },
+    { node: 'Spellbook_open', label: 'open spellbook' },
+  ],
+};
+
+export const itemsFor = (model) => ITEMS[model] ?? [];
 
 // Never tint these — a green face reads as a bug, not as variety.
 export const SKIN_PART = /head|face|hair/i;

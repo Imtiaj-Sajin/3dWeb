@@ -17,7 +17,10 @@ import {
   ROAD_Z_MAX,
   ANIM,
   MODELS,
+  TINTS,
+  SCALES,
   pickLook,
+  itemsFor,
   makeName,
 } from '../shared/world.js';
 
@@ -136,8 +139,31 @@ const meta = (e) => ({
   model: e.model,
   tint: e.tint,
   scale: e.scale,
+  item: e.item ?? null,
   bot: !!e.bot,
 });
+
+// The showroom is free but the server still validates: a client may only ask
+// for a model, tint and item that actually exist, and an item its own
+// character can hold.
+function sanitizeLook(look, current) {
+  if (!look || typeof look !== 'object') return null;
+  const out = {};
+  if (MODELS.includes(look.model)) out.model = look.model;
+  if (TINTS.includes(look.tint)) out.tint = look.tint;
+  if (SCALES.includes(look.scale)) out.scale = look.scale;
+
+  const model = out.model ?? current.model;
+  if (look.item === null) out.item = null;
+  else if (itemsFor(model).some((i) => i.node === look.item)) out.item = look.item;
+
+  // changing character drops anything the new one cannot hold
+  if (out.model && out.item === undefined) {
+    const stillValid = itemsFor(out.model).some((i) => i.node === current.item);
+    if (!stillValid) out.item = null;
+  }
+  return Object.keys(out).length ? out : null;
+}
 const send = (ws, msg) => {
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));
 };
@@ -168,6 +194,7 @@ wss.on('connection', (ws) => {
     ws,
     name: uniqueName(),
     ...pickLook(),
+    item: null, // everyone arrives empty-handed; the showroom changes that
     x: roadX(spawnZ),
     z: spawnZ,
     h: Math.PI,
@@ -203,6 +230,12 @@ wss.on('connection', (ws) => {
       player.h = m.h;
       player.a = m.a;
       if (moved) player.lastActive = now();
+    } else if (m.t === 'look') {
+      const look = sanitizeLook(m.look, player);
+      if (!look) return;
+      Object.assign(player, look);
+      player.lastActive = now();
+      broadcast({ t: 'look', id, look: meta(player) });
     } else if (m.t === 'ev') {
       player.lastActive = now();
       broadcast({ t: 'ev', id, e: m.e }, id);

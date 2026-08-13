@@ -6,11 +6,12 @@ import { buildSky, buildClouds, buildBirds } from './sky.js';
 import { buildPollen, buildDistantHills } from './atmosphere.js';
 import { buildScatter } from './scatter.js';
 import { buildProps } from './props.js';
+import { buildShowroom, plinthSpots, SHOWROOM_X, SHOWROOM_Z, STATUE_RANGE } from './showroom.js';
 import { Input } from './input.js';
 import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
 import {
-  loadCharacterGLBs,
+  loadModel,
   createRig,
   applyLook,
   Player,
@@ -19,7 +20,7 @@ import {
 } from './characters.js';
 import { Net, serverUrl } from './net.js';
 import { RemoteCharacter, NameTags } from './remote.js';
-import { ANIM, MODELS, pickLook } from '../shared/world.js';
+import { ANIM, MODELS, TINTS, pickLook, itemsFor } from '../shared/world.js';
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -78,10 +79,17 @@ scene.add(clouds.group);
 const props = buildProps();
 scene.add(props.group);
 
-const scatter = buildScatter({ isMobile, avoid: props.colliders });
+const showroom = buildShowroom();
+scene.add(showroom.group);
+
+// scatter avoids everything hand-placed, so nothing grows through a plinth
+const scatter = buildScatter({
+  isMobile,
+  avoid: [...props.colliders, ...showroom.colliders],
+});
 scene.add(scatter.group);
 
-const colliders = [...scatter.colliders, ...props.colliders];
+const colliders = [...scatter.colliders, ...props.colliders, ...showroom.colliders];
 
 // built last: the flock steers around whatever is already in the world
 const birds = buildBirds({ obstacles: colliders });
@@ -117,8 +125,16 @@ manager.onProgress = (_url, loaded, total) => {
 const status = document.getElementById('status');
 const nameTags = new NameTags(camera, document.getElementById('tags'));
 const remotes = new Map(); // id -> RemoteCharacter
-let gltfByModel = null;
+const statues = [];
 let net = null;
+let playerLook = null;
+let soloStarted = false;
+let statuesLoaded = false;
+
+// what you are currently wearing/carrying; the showroom edits this
+let myLook = { model: MODELS[0], tint: TINTS[0], scale: 1, item: null };
+
+for (const item of showroom.interactables) interactions.add(item);
 
 // debug handle: inspect/teleport from the console, e.g.
 //   __wa.interactions.items.map(i => i.label)
@@ -133,6 +149,10 @@ window.__wa = {
   npcs,
   heightAt,
   remotes,
+  statues,
+  get look() {
+    return myLook;
+  },
   get net() {
     return net;
   },
@@ -146,47 +166,96 @@ function setStatus(text, kind = '') {
   status.className = `status ${kind}`.trim();
 }
 
+// roster is the synchronous truth of who should exist. A model may still be
+// downloading when someone leaves, so every async step re-checks it.
+const roster = new Map(); // id -> info
+
 function addRemote(info) {
-  if (remotes.has(info.id) || !gltfByModel) return;
-  const gltf = gltfByModel[info.model] ?? gltfByModel[MODELS[0]];
-  const rc = new RemoteCharacter(createRig(gltf), info);
-  remotes.set(info.id, rc);
-  scene.add(rc.root);
-  nameTags.add(info.id, info.name, info.bot);
-  interactions.add({
-    kind: 'greet',
-    label: 'say hi',
-    anchor: new THREE.Vector3(),
-    follow: rc,
-    remote: rc,
-    id: info.id,
-  });
+  if (roster.has(info.id)) return;
+  roster.set(info.id, info);
+
+  loadModel(info.model)
+    .then((gltf) => {
+      if (roster.get(info.id) !== info) return; // left while their model loaded
+      const rc = new RemoteCharacter(createRig(gltf), info);
+      remotes.set(info.id, rc);
+      scene.add(rc.root);
+      nameTags.add(info.id, info.name, info.bot);
+      interactions.add({
+        kind: 'greet',
+        label: 'say hi',
+        anchor: new THREE.Vector3(),
+        follow: rc,
+        remote: rc,
+        id: info.id,
+      });
+    })
+    .catch((err) => console.error(`could not load model ${info.model}:`, err));
 }
 
 // Give the local player the look the server handed out, so the character you
 // see is the character everyone else sees. Swaps the whole rig when the model
 // differs, keeping wherever you were standing.
+// Apply a change to your own appearance and tell everyone about it.
+function changeMyLook(patch) {
+  const next = { ...myLook, ...patch };
+  // a character can only hold its own gear
+  if (patch.model && !itemsFor(next.model).some((i) => i.node === next.item)) {
+    next.item = null;
+  }
+  setPlayerLook(next);
+  net?.sendLook(next);
+}
+
+// Statues are what make the remaining models download, so they wait until
+// somebody is actually close enough to look at them.
+function loadStatues() {
+  if (statuesLoaded) return;
+  statuesLoaded = true;
+  for (const spot of plinthSpots()) {
+    loadModel(spot.model)
+      .then((gltf) => {
+        const rig = createRig(gltf);
+        rig.root.position.set(spot.x, spot.y + 0.52, spot.z);
+        rig.root.rotation.y = spot.facing;
+        rig.actions.Idle?.play(); // one clip, no mixer ticks needed after this
+        rig.mixer.update(0.4);
+        scene.add(rig.root);
+        statues.push(rig);
+      })
+      .catch((err) => console.error(`statue ${spot.model} failed:`, err));
+  }
+}
+
 function setPlayerLook(look) {
-  if (!look || !gltfByModel) return;
-  const gltf = gltfByModel[look.model] ?? gltfByModel[MODELS[0]];
-  const rig = createRig(gltf);
-  applyLook(rig.root, look);
+  if (!look) return;
+  playerLook = look;
+  myLook = { ...myLook, ...look };
 
-  const old = player.root;
-  rig.root.position.copy(old.position);
-  rig.root.rotation.copy(old.rotation);
-  scene.remove(old);
-  player.mixer.stopAllAction();
+  loadModel(look.model)
+    .then((gltf) => {
+      if (playerLook !== look || !player) return; // reassigned mid-download
+      const rig = createRig(gltf);
+      applyLook(rig.root, look);
 
-  player.root = rig.root;
-  player.mixer = rig.mixer;
-  player.actions = rig.actions;
-  player.current = null;
-  player.play('Idle', 0);
-  scene.add(rig.root);
+      const old = player.root;
+      rig.root.position.copy(old.position);
+      rig.root.rotation.copy(old.rotation);
+      scene.remove(old);
+      player.mixer.stopAllAction();
+
+      player.root = rig.root;
+      player.mixer = rig.mixer;
+      player.actions = rig.actions;
+      player.current = null;
+      player.play('Idle', 0);
+      scene.add(rig.root);
+    })
+    .catch((err) => console.error(`could not load model ${look.model}:`, err));
 }
 
 function removeRemote(id) {
+  roster.delete(id);
   const rc = remotes.get(id);
   if (!rc) return;
   rc.dispose(scene);
@@ -198,21 +267,28 @@ function removeRemote(id) {
 function playSolo(reason) {
   // No server, or it went away: keep the world alive with local bots so the
   // published site is never broken by a socket being down.
-  if (npcs.length || !gltfByModel) return;
-  const sources = [gltfByModel.Knight, gltfByModel.Barbarian, gltfByModel.Rogue];
-  sources.forEach((gltf, i) => {
-    const npc = new NPC(createRig(gltf), i * 7 + 3);
-    npcs.push(npc);
-    scene.add(npc.root);
-    interactions.add({
-      kind: 'greet',
-      label: 'say hi',
-      anchor: new THREE.Vector3(),
-      follow: npc,
-      npc,
-    });
-  });
   if (reason) setStatus(reason, 'warn');
+  if (npcs.length || soloStarted) return;
+  soloStarted = true;
+
+  ['Knight', 'Barbarian', 'Mage'].forEach((model, i) => {
+    loadModel(model)
+      .then((gltf) => {
+        if (net?.connected) return; // server turned up first; it owns the crowd
+        const npc = new NPC(createRig(gltf), i * 7 + 3);
+        applyLook(npc.root, pickLook());
+        npcs.push(npc);
+        scene.add(npc.root);
+        interactions.add({
+          kind: 'greet',
+          label: 'say hi',
+          anchor: new THREE.Vector3(),
+          follow: npc,
+          npc,
+        });
+      })
+      .catch((err) => console.error(`could not load model ${model}:`, err));
+  });
 }
 
 function connectOrPlaySolo() {
@@ -230,6 +306,7 @@ function connectOrPlaySolo() {
       // hand over from local bots to the shared world
       for (const npc of npcs) scene.remove(npc.root);
       npcs.length = 0;
+      soloStarted = false;
       interactions.items = interactions.items.filter((it) => !it.npc);
       player.root.position.set(m.spawn.x, heightAt(m.spawn.x, m.spawn.z), m.spawn.z);
       setPlayerLook(m.you);
@@ -249,6 +326,21 @@ function connectOrPlaySolo() {
       for (const [id, x, z, h, a] of list) remotes.get(id)?.applySnapshot(x, z, h, a);
     },
     onEvent: (id, e) => remotes.get(id)?.playEvent(e),
+    onLook: (id, look) => {
+      const info = roster.get(id);
+      if (!info) return;
+      Object.assign(info, look);
+      const rc = remotes.get(id);
+      if (!rc) return; // still downloading; it will be built with the new look
+      loadModel(look.model)
+        .then((gltf) => {
+          if (roster.get(id) !== info || remotes.get(id) !== rc) return;
+          const oldRoot = rc.swapRig(createRig(gltf), info);
+          scene.remove(oldRoot);
+          scene.add(rc.root);
+        })
+        .catch((err) => console.error(`could not load model ${look.model}:`, err));
+    },
     onFail: () => playSolo(''),
     onClose: (kicked) => {
       for (const id of [...remotes.keys()]) removeRemote(id);
@@ -285,8 +377,10 @@ function animCode(p) {
   return ANIM.IDLE;
 }
 
-loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
-  .then(([rogue, knight, barbarian]) => {
+// Only the starting model blocks the loading screen. Everything else is
+// fetched the moment somebody actually shows up wearing it.
+loadModel(MODELS[0], manager)
+  .then((rogue) => {
     player = new Player(createRig(rogue));
     // debug spawn override: ?z=-50 (x defaults to the road at that z)
     const params = new URLSearchParams(location.search);
@@ -296,8 +390,6 @@ loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
       player.root.position.set(x, heightAt(x, z), z);
     }
     scene.add(player.root);
-
-    gltfByModel = { Rogue: rogue, Knight: knight, Barbarian: barbarian };
     connectOrPlaySolo();
 
     progressFill.style.width = '100%';
@@ -362,9 +454,27 @@ renderer.setAnimationLoop(() => {
     } else {
       const near = interactions.nearest(player.root.position);
       if (near) {
-        interactions.show(near.anchor, near.label, !input.isTouch);
+        // the gear rack names whatever you would pick up next
+        let label = near.label;
+        if (near.kind === 'item') {
+          const list = itemsFor(myLook.model);
+          const at = list.findIndex((i) => i.node === myLook.item);
+          const next = list[at + 1] ?? null;
+          label = next ? `pick up the ${next.label}` : 'put it down';
+        }
+        interactions.show(near.anchor, label, !input.isTouch);
         if (pressed) {
-          if (near.kind === 'rest') {
+          if (near.kind === 'wear') {
+            changeMyLook(near.look);
+            player.interact(near);
+          } else if (near.kind === 'item') {
+            // cycle: nothing -> first item -> ... -> nothing
+            const list = itemsFor(myLook.model);
+            const at = list.findIndex((i) => i.node === myLook.item);
+            const next = list[at + 1] ?? null;
+            changeMyLook({ item: next ? next.node : null });
+            player.interact(near);
+          } else if (near.kind === 'rest') {
             player.beginRest(near);
           } else if (near.kind === 'greet') {
             player.wave();
@@ -398,6 +508,12 @@ renderer.setAnimationLoop(() => {
     separateCharacters([player, ...npcs, ...remotes.values()], colliders);
     nameTags.update(remotes.values());
     rig.update(dt, player, input);
+
+    // approaching the exhibition is what pulls the remaining models down
+    if (!statuesLoaded) {
+      const p = player.root.position;
+      if (Math.hypot(p.x - SHOWROOM_X, p.z - SHOWROOM_Z) < STATUE_RANGE) loadStatues();
+    }
 
     if (net) {
       const p = player.root.position;

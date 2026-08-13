@@ -6,11 +6,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { heightAt, roadX, WORLD_RADIUS } from './terrain.js';
-import { SKIN_PART } from '../shared/world.js';
+import { SKIN_PART, HELD_ITEM } from '../shared/world.js';
 
 const CHARACTER_HEIGHT = 1.5;
 const GRAVITY = 16;
-const WEAPON_RE = /sword|dagger|knife|axe|crossbow|shield|arrow|quiver|staff|wand|bow|spellbook|mug|throwable/i;
 
 // exponential damping factor — stable at any frame rate
 function damp(k, dt) {
@@ -24,18 +23,29 @@ function angleLerp(a, b, t) {
   return a + d * t;
 }
 
-export function loadCharacterGLBs(manager, names) {
-  const loader = new GLTFLoader(manager);
-  const base = import.meta.env.BASE_URL;
-  return Promise.all(
-    names.map(
-      (name) =>
-        new Promise((resolve, reject) => {
-          loader.load(`${base}models/${name}.glb`, resolve, undefined, reject);
-        })
-    )
-  );
+// Models are fetched the first time somebody actually wears one, then cached
+// forever. Only the model you spawn as is on the critical path; the rest
+// arrive quietly as people turn up wearing them.
+const modelCache = new Map();
+
+export function loadModel(name, manager) {
+  if (!modelCache.has(name)) {
+    const loader = new GLTFLoader(manager);
+    const base = import.meta.env.BASE_URL;
+    modelCache.set(
+      name,
+      new Promise((resolve, reject) => {
+        loader.load(`${base}models/${name}.glb`, resolve, undefined, reject);
+      }).catch((err) => {
+        modelCache.delete(name); // let a later join retry
+        throw err;
+      })
+    );
+  }
+  return modelCache.get(name);
 }
+
+export const isModelLoaded = (name) => modelCache.has(name);
 
 // Build a ready-to-place rig from a loaded gltf. Always clones, so the same
 // gltf can back several characters without them sharing (or re-scaling)
@@ -53,7 +63,9 @@ export function createRig(gltf) {
         color: src.color ? src.color.clone() : new THREE.Color('#ffffff'),
       });
     }
-    if (WEAPON_RE.test(o.name)) o.visible = false;
+    // prep-characters.mjs already strips these, but a raw model would still
+    // arrive armed
+    if (HELD_ITEM.test(o.name)) o.visible = false;
   });
 
   // normalize to a consistent height
@@ -75,6 +87,14 @@ export function createRig(gltf) {
   return { root, model, mixer, actions };
 }
 
+// Show exactly one held item (or none). The items are already parented to the
+// hand bones, so this is all "carrying" needs to be.
+export function setHeldItem(root, itemNode) {
+  root.traverse((o) => {
+    if (HELD_ITEM.test(o.name)) o.visible = !!itemNode && o.name === itemNode;
+  });
+}
+
 // Give a rig its clothing colour and build. createRig hands every character
 // its own material instances, so tinting one never leaks into another.
 export function applyLook(root, look) {
@@ -88,6 +108,7 @@ export function applyLook(root, look) {
     });
   }
   if (look.scale && look.scale !== 1) root.scale.setScalar(look.scale);
+  setHeldItem(root, look.item);
 }
 
 class AnimatedCharacter {

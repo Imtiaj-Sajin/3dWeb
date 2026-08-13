@@ -86,6 +86,35 @@ the interactable list.
 - `src/sky.js` — gradient sky dome, drifting low-poly clouds, birds following
   a closed curve.
 
+## Characters
+
+Five models (Rogue, Knight, Barbarian, Mage, Hooded Rogue), each combined with
+14 clothing tints and 3 heights — 126 distinguishable people from 4.4MB of
+assets.
+
+Models are **fetched on demand**: only the one you spawn as blocks the loading
+screen, and the rest arrive as people turn up wearing them.
+
+`npm run prep:characters` rebuilds `public/models/` from the untouched
+downloads in `assets/src-characters/` (gitignored). It drops the ~60 animation
+clips the game never plays and the weapons nobody carries, which takes each
+model from ~3.5MB to ~0.9MB — a 74% saving.
+
+Re-run it after adding a character, or after adding a clip to `USED_CLIPS` in
+`shared/world.js`. That list is the single source of truth for which
+animations survive; if a clip is not in it, it will not be in the shipped
+model. Re-fetch the raw models with:
+
+```bash
+BASE=https://raw.githubusercontent.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/main/addons/kaykit_character_pack_adventures/Characters/gltf
+for n in Rogue Knight Barbarian Mage Rogue_Hooded; do
+  curl -sL "$BASE/$n.glb" -o "assets/src-characters/$n.glb"
+done
+```
+
+Tints skip faces and hair — colouring those turns skin green, which reads as a
+bug rather than as variety.
+
 ## Credits
 
 - Character models & animations: [KayKit](https://kaylousberg.com/) by

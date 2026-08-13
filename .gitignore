@@ -4,6 +4,10 @@ node_modules/
 # build output — Vercel builds this itself
 dist/
 
+# untouched character downloads; only the stripped copies in public/models
+# are shipped. Re-fetch with the URL noted in scripts/prep-characters.mjs
+assets/src-characters/
+
 # local tooling / scratch
 .claude/
 .vercel/
