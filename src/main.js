@@ -293,6 +293,7 @@ function setPlayerLook(look) {
       player.mixer = rig.mixer;
       player.actions = rig.actions;
       player.current = null;
+      player._started = new Set(); // fresh rig, nothing started on it yet
       player.play('Idle', 0);
       scene.add(rig.root);
     })

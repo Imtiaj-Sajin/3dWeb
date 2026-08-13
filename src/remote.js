@@ -30,6 +30,8 @@ export class RemoteCharacter {
     this.mixer = rig.mixer;
     this.actions = rig.actions;
     this.current = null;
+    this._started = new Set(); // clip names we have started on this rig
+    this._oneShots = new Set(); // of those, the ones that do not loop
 
     this.target = new THREE.Vector3();
     this.targetHeading = 0;
@@ -66,14 +68,36 @@ export class RemoteCharacter {
     this.mixer = rig.mixer;
     this.actions = rig.actions;
     this.current = null;
+    this._started = new Set(); // fresh rig, nothing started on it yet
+    this._oneShots = new Set();
     applyLook(this.root, info);
     this.play(ANIM_CLIP[this.anim] ?? 'Idle', 0);
     return oldRoot;
   }
 
+  // see the note in characters.js: finished one-shots hold full weight and
+  // must be cut, or every later pose is an average of them
   play(name, fade = 0.22, once = false) {
     if (this.current === name || !this.actions[name]) return;
     const next = this.actions[name];
+
+    // a one-shot takes over outright rather than averaging with what was
+    // playing, so a flinch or a death reads at full strength
+    let cut = false;
+    for (const other of [...this._started]) {
+      if (other === name) continue;
+      const action = this.actions[other];
+      this._started.delete(other);
+      if (!action) continue;
+      if (once || this._oneShots.has(other)) {
+        action.stop();
+        this._oneShots.delete(other);
+        cut = true;
+      } else {
+        action.fadeOut(fade);
+      }
+    }
+
     next.reset();
     if (once) {
       next.setLoop(THREE.LoopOnce, 1);
@@ -82,8 +106,17 @@ export class RemoteCharacter {
       next.setLoop(THREE.LoopRepeat, Infinity);
       next.clampWhenFinished = false;
     }
-    next.fadeIn(fade).play();
-    if (this.current && this.actions[this.current]) this.actions[this.current].fadeOut(fade);
+
+    if (cut) {
+      next.setEffectiveWeight(1);
+      next.play();
+    } else {
+      next.fadeIn(fade).play();
+    }
+
+    this._started.add(name);
+    if (once) this._oneShots.add(name);
+    else this._oneShots.delete(name);
     this.current = name;
   }
 

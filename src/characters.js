@@ -124,6 +124,8 @@ class AnimatedCharacter {
     this.mixer = rig.mixer;
     this.actions = rig.actions;
     this.current = null;
+    this._started = new Set(); // clip names we have started on this rig
+    this._oneShots = new Set(); // of those, the ones that do not loop
     this.heading = 0;
     this.velocity = new THREE.Vector2(); // xz plane
     this.vy = 0;
@@ -149,19 +151,58 @@ class AnimatedCharacter {
   play(name, fade = 0.22, once = false) {
     if (this.current === name || !this.actions[name]) return;
     const next = this.actions[name];
+
+    // Three blends every action that still carries weight, so anything left
+    // behind keeps shaping the pose. A one-shot that has finished holds its
+    // final frame at full weight and does NOT reliably fade out — which is
+    // what left dead players standing in a half-collapsed lean: the skeleton
+    // was rendering the average of a death, a flinch and an idle at once.
+    // One-shots are therefore cut outright; looping clips still cross-fade.
+    // A flinch, a swing or a death should read at full strength, so it takes
+    // over outright instead of averaging with whatever was playing.
+    const cut = this._retire(name, fade, once);
+
     next.reset();
     if (once) {
       next.setLoop(THREE.LoopOnce, 1);
-      next.clampWhenFinished = true; // hold the last pose while fading out
+      next.clampWhenFinished = true; // hold the last frame until replaced
     } else {
       next.setLoop(THREE.LoopRepeat, Infinity);
       next.clampWhenFinished = false;
     }
-    next.fadeIn(fade).play();
-    if (this.current && this.actions[this.current]) {
-      this.actions[this.current].fadeOut(fade);
+
+    if (cut) {
+      // nothing is left to blend against, so take full weight at once rather
+      // than fading in from zero and drifting through the bind pose
+      next.setEffectiveWeight(1);
+      next.play();
+    } else {
+      next.fadeIn(fade).play();
     }
+
+    this._started.add(name);
+    if (once) this._oneShots.add(name);
+    else this._oneShots.delete(name);
     this.current = name;
+    return true;
+  }
+
+  _retire(keep, fade, hard = false) {
+    let cut = false;
+    for (const other of [...this._started]) {
+      if (other === keep) continue;
+      const action = this.actions[other];
+      this._started.delete(other);
+      if (!action) continue;
+      if (hard || this._oneShots.has(other)) {
+        action.stop();
+        this._oneShots.delete(other);
+        cut = true;
+      } else {
+        action.fadeOut(fade);
+      }
+    }
+    return cut;
   }
 
   emoteDuration(name, fallback = 1.2) {
