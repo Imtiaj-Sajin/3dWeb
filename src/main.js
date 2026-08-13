@@ -75,7 +75,7 @@ for (const item of [...props.interactables, ...scatter.interactables]) {
 
 // debug handle: inspect/teleport from the console, e.g.
 //   __wa.interactions.items.map(i => i.label)
-window.__wa = { interactions, scene, get player() { return player; } };
+window.__wa = { THREE, interactions, scene, get player() { return player; } };
 
 // ---------- characters ----------
 

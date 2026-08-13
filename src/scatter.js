@@ -313,7 +313,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
       kind: 'rest',
       label: 'sit',
       anchor: new THREE.Vector3(sx, heightAt(sx, bz) + 1.4, bz),
-      spot: { x: sx, z: bz },
+      spot: { x: sx, y: heightAt(sx, bz), z: bz },
       facing: toRoad > 0 ? Math.PI / 2 : -Math.PI / 2,
       clips: { enter: 'Sit_Floor_Down', idle: 'Sit_Floor_Idle', exit: 'Sit_Floor_StandUp' },
     });
@@ -337,7 +337,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
       kind: 'rest',
       label: 'lie down',
       anchor: new THREE.Vector3(lx, heightAt(lx, pz) + 1.4, pz),
-      spot: { x: lx, z: pz },
+      spot: { x: lx, y: heightAt(lx, pz), z: pz },
       facing: toRoad > 0 ? Math.PI / 2 : -Math.PI / 2,
       clips: { enter: 'Lie_Down', idle: 'Lie_Idle', exit: 'Lie_StandUp' },
     });

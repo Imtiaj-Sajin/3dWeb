@@ -84,6 +84,7 @@ class AnimatedCharacter {
     this.velocity = new THREE.Vector2(); // xz plane
     this.vy = 0;
     this.grounded = true;
+    this.ignoreCollider = null;
   }
 
   play(name, fade = 0.22, once = false) {
@@ -111,6 +112,7 @@ class AnimatedCharacter {
   resolveCollisions(colliders) {
     const p = this.root.position;
     for (const c of colliders) {
+      if (c === this.ignoreCollider) continue;
       const dx = p.x - c.x;
       const dz = p.z - c.z;
       const d2 = dx * dx + dz * dz;
@@ -204,7 +206,10 @@ export class Player extends AnimatedCharacter {
     this.mode = 'entering';
     this.modeTimer = this.emoteDuration(item.clips.enter, 1);
     this.velocity.set(0, 0);
-    this.root.position.set(item.spot.x, heightAt(item.spot.x, item.spot.z), item.spot.z);
+    // the seat sits inside the bench's own collider, so suspend it until the
+    // player has walked clear again after standing up
+    this.ignoreCollider = item.collider ?? null;
+    this.root.position.set(item.spot.x, item.spot.y, item.spot.z);
     this.heading = item.facing;
     this.root.rotation.y = this.heading;
     this.play(item.clips.enter, 0.25, true);
@@ -255,9 +260,23 @@ export class Player extends AnimatedCharacter {
       }
 
       if (this.mode !== 'free') {
-        this.applyGround(dt);
+        if (this.rest) {
+          // pinned to the seat: the pose is authored around this exact spot
+          this.root.position.set(this.rest.spot.x, this.rest.spot.y, this.rest.spot.z);
+        } else {
+          this.applyGround(dt);
+        }
         this.mixer.update(dt);
         return;
+      }
+    }
+
+    // re-enable a suspended collider once the player has stepped clear of it
+    if (this.ignoreCollider) {
+      const c = this.ignoreCollider;
+      const clear = c.r + 0.45;
+      if (Math.hypot(this.root.position.x - c.x, this.root.position.z - c.z) > clear) {
+        this.ignoreCollider = null;
       }
     }
 
