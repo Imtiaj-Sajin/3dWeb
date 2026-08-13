@@ -170,6 +170,53 @@ function litGroundColor(x, z) {
   return _lit;
 }
 
+// ---------- wildflowers ----------
+
+function makeFlower(petalColor) {
+  const parts = [];
+  const stem = new THREE.CylinderGeometry(0.012, 0.016, 0.3, 3);
+  stem.translate(0, 0.15, 0);
+  parts.push(paint(stem, '#5f8f4a'));
+
+  // a ring of petals around a small centre
+  for (let i = 0; i < 5; i++) {
+    const petal = new THREE.CircleGeometry(0.05, 4);
+    petal.rotateX(-Math.PI / 2);
+    petal.translate(0.055, 0.31, 0);
+    petal.rotateY((i / 5) * Math.PI * 2);
+    parts.push(paint(petal, petalColor));
+  }
+  const core = new THREE.CircleGeometry(0.032, 5);
+  core.rotateX(-Math.PI / 2);
+  core.translate(0, 0.318, 0);
+  parts.push(paint(core, '#f6d873'));
+
+  return merge(parts);
+}
+
+// Foliage sways like the grass, but only the canopy — the trunk stays put.
+function makeFoliageMaterial(timeUniform, { pivot = 1.2, top = 3.4, amp = 0.06 } = {}) {
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = timeUniform;
+    shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      /* glsl */ `
+      vec3 transformed = vec3( position );
+      #ifdef USE_INSTANCING
+        float wPhase = instanceMatrix[3].x * 0.22 + instanceMatrix[3].z * 0.31;
+        float wAmt = smoothstep(${pivot.toFixed(2)}, ${top.toFixed(2)}, position.y);
+        transformed.x += sin(uTime * 0.9 + wPhase) * ${amp.toFixed(3)} * wAmt;
+        transformed.z += cos(uTime * 0.7 + wPhase * 1.27) * ${(amp * 0.6).toFixed(3)} * wAmt;
+      #endif
+      `
+    );
+  };
+  mat.customProgramCacheKey = () => `foliage-${pivot}-${top}-${amp}`;
+  return mat;
+}
+
 function makeGrassMaterial(timeUniform) {
   // unlit: vertical blades catch almost no Lambert light and turn into dark
   // sticks — flat painterly color matches the reference better anyway
@@ -257,21 +304,23 @@ export function buildScatter({ isMobile, avoid = [] }) {
   for (let v = 0; v < 3; v++) {
     const { mesh, placed } = scatterInstanced(
       makeTree(v),
-      flatWhite(),
+      makeFoliageMaterial(timeUniform, { pivot: 1.4, top: 3.8, amp: 0.07 }),
       treeBudget[v],
       (x, z) => roadDist(x, z) > 9 && Math.hypot(x, z) > 12 && !nearAvoid(x, z, 1.8),
       { scale: () => 0.8 + Math.random() * 0.7 }
     );
     mesh.castShadow = true;
     group.add(mesh);
-    for (const it of placed) colliders.push({ x: it.x, z: it.z, r: 0.5 * it.s });
+    for (const it of placed) {
+      colliders.push({ x: it.x, z: it.z, r: 0.5 * it.s, camR: 1.45 * it.s });
+    }
   }
 
   // --- bushes ---
   for (const dark of [true, false]) {
     const { mesh } = scatterInstanced(
       makeBush(dark),
-      flatWhite(),
+      makeFoliageMaterial(timeUniform, { pivot: 0.15, top: 1.0, amp: 0.035 }),
       isMobile ? 30 : 44,
       (x, z) => roadDist(x, z) > 6.2 && !nearAvoid(x, z, 1.2),
       { scale: () => 0.7 + Math.random() * 1.1 }
@@ -359,6 +408,25 @@ export function buildScatter({ isMobile, avoid = [] }) {
     { scale: () => 0.6 + Math.random() * 0.6, tintAt: litGroundColor }
   );
   group.add(grass);
+
+  // --- wildflowers: small colour pops through the meadow ---
+  const flowerMat = makeGrassMaterial(timeUniform); // unlit + shares the sway
+  for (const petal of ['#f4f0e2', '#f6c9d8', '#f7dc86']) {
+    const { mesh } = scatterInstanced(
+      makeFlower(petal),
+      flowerMat,
+      isMobile ? 90 : 170,
+      (x, z) => {
+        if (roadDist(x, z) < 6.6) return false;
+        if (heightAt(x, z) > 8) return false; // meadow only, not the dunes
+        if (nearAvoid(x, z, 0.8)) return false;
+        // clump them, so they read as patches rather than confetti
+        return fbm2(x * 0.09 + 61, z * 0.09 + 13) > 0.24;
+      },
+      { scale: () => 0.8 + Math.random() * 0.6 }
+    );
+    group.add(mesh);
+  }
 
   return { group, colliders, interactables, timeUniform };
 }

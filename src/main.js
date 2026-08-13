@@ -3,6 +3,7 @@ import './style.css';
 
 import { buildTerrain, buildRoadMarkings, heightAt, roadX } from './terrain.js';
 import { buildSky, buildClouds, buildBirds } from './sky.js';
+import { buildPollen, buildDistantHills } from './atmosphere.js';
 import { buildScatter } from './scatter.js';
 import { buildProps } from './props.js';
 import { Input } from './input.js';
@@ -20,6 +21,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.75 : 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// No filmic tone mapping on purpose: these are flat, hand-picked pastel
+// colours, and ACES desaturates them into a washed-out grey-green.
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -33,8 +36,7 @@ const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerH
 const hemi = new THREE.HemisphereLight('#bfe0f2', '#9aa66f', 0.8);
 scene.add(hemi);
 
-const SUN_DIR = new THREE.Vector3(0.55, 0.72, -0.42).normalize();
-const sun = new THREE.DirectionalLight('#fff0d0', 1.7);
+const sun = new THREE.DirectionalLight('#fff0d0', 1.75);
 sun.castShadow = true;
 sun.shadow.mapSize.setScalar(isMobile ? 1024 : 2048);
 sun.shadow.camera.near = 10;
@@ -50,9 +52,15 @@ scene.add(sun.target);
 
 // ---------- world ----------
 
+const SUN_DIR = new THREE.Vector3(0.55, 0.72, -0.42).normalize();
+
 scene.add(buildTerrain());
 scene.add(buildRoadMarkings());
-scene.add(buildSky());
+scene.add(buildSky(SUN_DIR));
+scene.add(buildDistantHills());
+
+const pollen = buildPollen(isMobile ? 180 : 320);
+scene.add(pollen.points);
 
 const clouds = buildClouds();
 scene.add(clouds.group);
@@ -77,7 +85,7 @@ for (const item of [...props.interactables, ...scatter.interactables]) {
 // ---------- characters ----------
 
 const input = new Input();
-const rig = new CameraRig(camera);
+const rig = new CameraRig(camera, colliders);
 
 let player = null;
 const npcs = [];
@@ -176,6 +184,7 @@ renderer.setAnimationLoop(() => {
   scatter.timeUniform.value = elapsed;
   clouds.update(dt);
   birds.update(dt, elapsed);
+  pollen.update(dt, elapsed, player ? player.root.position : camera.position);
 
   if (player) {
     player.update(dt, input, rig.yaw, colliders);

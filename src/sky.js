@@ -5,16 +5,18 @@
 import * as THREE from 'three';
 import { noise2 } from './noise.js';
 
-export function buildSky() {
-  const geo = new THREE.SphereGeometry(430, 24, 14);
+export function buildSky(sunDir) {
+  const geo = new THREE.SphereGeometry(430, 32, 18);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
     uniforms: {
-      topColor: { value: new THREE.Color('#4aa0dd') },
-      midColor: { value: new THREE.Color('#a5d5ef') },
-      horizonColor: { value: new THREE.Color('#f6e7c9') },
+      topColor: { value: new THREE.Color('#3f95d8') },
+      midColor: { value: new THREE.Color('#a8d8f0') },
+      horizonColor: { value: new THREE.Color('#f7e6c4') },
+      sunColor: { value: new THREE.Color('#fff3d0') },
+      sunDir: { value: sunDir.clone() },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -27,11 +29,22 @@ export function buildSky() {
       uniform vec3 topColor;
       uniform vec3 midColor;
       uniform vec3 horizonColor;
+      uniform vec3 sunColor;
+      uniform vec3 sunDir;
       varying vec3 vDir;
       void main() {
-        float h = max(vDir.y, 0.0);
-        vec3 col = mix(horizonColor, midColor, smoothstep(0.0, 0.18, h));
-        col = mix(col, topColor, smoothstep(0.12, 0.55, h));
+        vec3 d = normalize(vDir);
+        float h = max(d.y, 0.0);
+
+        vec3 col = mix(horizonColor, midColor, smoothstep(0.0, 0.20, h));
+        col = mix(col, topColor, smoothstep(0.14, 0.62, h));
+
+        // warm bloom around the sun, plus a broad haze lifting off the horizon
+        float sd = max(dot(d, sunDir), 0.0);
+        col += sunColor * pow(sd, 6.0) * 0.30;
+        col += sunColor * pow(sd, 64.0) * 0.55;
+        col = mix(col, horizonColor, (1.0 - smoothstep(0.0, 0.10, h)) * 0.55);
+
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -133,16 +146,18 @@ export function buildClouds() {
 // ---------- birds ----------
 
 function makeWingGeometry() {
-  // swept, tapered wing: hinge at x=0, tip trailing slightly back and out
+  // swept, tapered wing: hinge at x=0, tip trailing slightly back and out.
+  // Deliberately small — a bird this size reads as distant wildlife rather
+  // than a dark shape cutting across the sky.
   const g = new THREE.BufferGeometry();
   // prettier-ignore
   const verts = new Float32Array([
-    0.0, 0, 0.14,   // leading root
-    0.0, 0, -0.1,   // trailing root
-    0.42, 0.02, -0.16, // mid trailing
-    0.0, 0, 0.14,
-    0.42, 0.02, -0.16,
-    0.62, 0.04, -0.3,  // swept tip
+    0.0,  0,    0.045,  // leading root
+    0.0,  0,   -0.035,  // trailing root
+    0.14, 0.004, -0.05, // mid trailing
+    0.0,  0,    0.045,
+    0.14, 0.004, -0.05,
+    0.23, 0.008, -0.09, // swept tip
   ]);
   g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
   g.computeVertexNormals();
@@ -153,37 +168,38 @@ export function buildBirds() {
   const group = new THREE.Group();
   group.name = 'birds';
 
-  const mat = new THREE.MeshBasicMaterial({ color: '#3a3f48', side: THREE.DoubleSide, fog: true });
+  // hazy blue-grey rather than near-black, so they sit in the sky instead of
+  // punching a hole in it
+  const mat = new THREE.MeshBasicMaterial({ color: '#6b7885', side: THREE.DoubleSide, fog: true });
 
-  const bodyGeo = new THREE.ConeGeometry(0.055, 0.4, 5);
+  const bodyGeo = new THREE.ConeGeometry(0.022, 0.15, 5);
   bodyGeo.rotateX(Math.PI / 2); // point forward (+z)
   const wingGeo = makeWingGeometry();
 
-  // closed loop path over the valley, below the cloud layer
+  // closed loop high over the valley, above the tree line
   const pts = [];
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     pts.push(
       new THREE.Vector3(
-        Math.cos(a) * (42 + noise2(i, 1) * 16),
-        17 + noise2(i, 6) * 3,
-        Math.sin(a) * (50 + noise2(i, 3) * 16)
+        Math.cos(a) * (46 + noise2(i, 1) * 16),
+        26 + noise2(i, 6) * 4,
+        Math.sin(a) * (54 + noise2(i, 3) * 16)
       )
     );
   }
   const path = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
 
   const birds = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     const bird = new THREE.Group();
     const body = new THREE.Mesh(bodyGeo, mat);
     const right = new THREE.Mesh(wingGeo, mat);
     const left = new THREE.Mesh(wingGeo, mat);
     left.scale.x = -1; // mirror
     bird.add(body, left, right);
-    bird.scale.setScalar(1.15);
     group.add(bird);
-    birds.push({ bird, left, right, t: (i * 0.13) % 1, phase: i * 1.7 });
+    birds.push({ bird, left, right, t: (i * 0.16) % 1, phase: i * 1.7 });
   }
 
   const pos = new THREE.Vector3();
