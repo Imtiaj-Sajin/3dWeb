@@ -56,20 +56,67 @@ export function buildSky(sunDir) {
 
 // ---------- clouds ----------
 
-function makeCloudGeometry(seed, puffs) {
+// Cumulus built as a fat base row with a smaller crown on top, so the
+// silhouette bulges in the middle instead of reading as a flat pancake.
+function makeCloudGeometry(seed, count, baseR, width) {
   const geos = [];
-  for (let i = 0; i < puffs; i++) {
-    const r = 2.2 + Math.abs(noise2(seed + i * 3.1, seed * 1.7)) * 3.4;
+
+  for (let i = 0; i < count; i++) {
+    const t = count > 1 ? i / (count - 1) - 0.5 : 0;
+    const bulge = Math.cos(t * Math.PI); // fattest at the centre
+    const r = baseR * (0.5 + bulge * 0.6) * (0.85 + Math.abs(noise2(seed + i * 3.1, seed * 1.7)) * 0.4);
     const g = new THREE.IcosahedronGeometry(r, 1);
-    g.scale(1.25, 0.5, 1);
+    g.scale(1.05, 0.82, 0.95);
     g.translate(
-      (i - (puffs - 1) / 2) * r * 1.15 + noise2(seed, i) * 1.5,
-      noise2(seed + 9, i * 2.2) * 0.9,
-      noise2(seed + 4, i * 1.4) * 2.2
+      t * width + noise2(seed, i) * baseR * 0.2,
+      noise2(seed + 9, i * 2.2) * baseR * 0.16,
+      noise2(seed + 4, i * 1.4) * baseR * 0.55
     );
     geos.push(g);
   }
+
+  const crown = Math.max(1, Math.round(count * 0.55));
+  for (let i = 0; i < crown; i++) {
+    const t = (crown > 1 ? i / (crown - 1) - 0.5 : 0) * 0.62;
+    const r = baseR * (0.42 + Math.abs(noise2(seed + i * 5.3, 5)) * 0.34);
+    const g = new THREE.IcosahedronGeometry(r, 1);
+    g.scale(1.0, 0.9, 0.95);
+    g.translate(
+      t * width + noise2(seed + 3, i) * baseR * 0.25,
+      baseR * 0.5 + noise2(seed + 7, i) * baseR * 0.18,
+      noise2(seed + 2, i * 1.9) * baseR * 0.4
+    );
+    geos.push(g);
+  }
+
   return mergeGeos(geos);
+}
+
+// Bake the lighting in: bright sunlit crown fading to a cooler underside.
+// Painted into vertex colours so the clouds can be drawn unlit and stay
+// clean and bright no matter where the sun is.
+function paintCloud(geo, topHex, bottomHex) {
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox;
+  const span = Math.max(max.y - min.y, 1e-3);
+  const pos = geo.attributes.position;
+  const nrm = geo.attributes.normal;
+  const top = new THREE.Color(topHex);
+  const bottom = new THREE.Color(bottomHex);
+  const colors = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+
+  for (let i = 0; i < pos.count; i++) {
+    const h = (pos.getY(i) - min.y) / span; // 0 underside, 1 crown
+    const up = nrm.getY(i) * 0.5 + 0.5; // faces tilted skyward catch more
+    const k = THREE.MathUtils.smoothstep(h * 0.6 + up * 0.5, 0.08, 0.92);
+    c.copy(bottom).lerp(top, k);
+    colors[i * 3] = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geo;
 }
 
 // tiny merge helper (positions + normals only, non-indexed)
@@ -96,47 +143,60 @@ export function buildClouds() {
   group.name = 'clouds';
   const drifters = [];
 
-  const mat = new THREE.MeshLambertMaterial({
-    color: '#fbf6ea',
-    emissive: '#8f887a',
-    emissiveIntensity: 0.55,
-  });
-  const creamMat = new THREE.MeshLambertMaterial({
-    color: '#f5e3ba',
-    emissive: '#9a8a68',
-    emissiveIntensity: 0.5,
-  });
+  // unlit: the shading is baked into the vertex colours
+  const skyMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
+  const hazeMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
 
-  // high drifting clouds
-  for (let i = 0; i < 7; i++) {
-    const mesh = new THREE.Mesh(makeCloudGeometry(i * 7.3, 4 + (i % 3)), mat);
-    const angle = (i / 7) * Math.PI * 2;
+  // high drifting cumulus — white crowns, cool blue-grey undersides
+  for (let i = 0; i < 9; i++) {
+    const big = i % 3 === 0;
+    const geo = paintCloud(
+      makeCloudGeometry(i * 7.3, big ? 5 : 3 + (i % 2), big ? 3.4 : 2.4, big ? 11 : 6.5),
+      '#fffdf8',
+      big ? '#ccd4e6' : '#d9dfec'
+    );
+    const mesh = new THREE.Mesh(geo, skyMat);
+    const angle = (i / 9) * Math.PI * 2;
     mesh.position.set(
-      Math.cos(angle) * (55 + (i % 4) * 22),
-      26 + noise2(i, 3) * 8,
-      Math.sin(angle) * (55 + ((i + 2) % 4) * 22)
+      Math.cos(angle) * (58 + (i % 4) * 24),
+      27 + noise2(i, 3) * 9,
+      Math.sin(angle) * (58 + ((i + 2) % 4) * 24)
     );
     mesh.rotation.y = noise2(i, 11) * Math.PI;
-    const s = 0.9 + Math.abs(noise2(i, 5)) * 0.8;
-    mesh.scale.setScalar(s);
+    mesh.scale.setScalar(0.85 + Math.abs(noise2(i, 5)) * 0.7);
     group.add(mesh);
-    drifters.push({ mesh, speed: 0.25 + Math.abs(noise2(i, 8)) * 0.35 });
+    drifters.push({ mesh, speed: 0.2 + Math.abs(noise2(i, 8)) * 0.3 });
   }
 
-  // big warm cumulus sitting low behind the dune rim (like the reference)
-  const big1 = new THREE.Mesh(makeCloudGeometry(31.7, 6), creamMat);
-  big1.position.set(38, 14, -104);
-  big1.scale.setScalar(2.6);
-  group.add(big1);
-  const big2 = new THREE.Mesh(makeCloudGeometry(44.2, 5), creamMat);
-  big2.position.set(-72, 12, 88);
-  big2.scale.setScalar(2.2);
-  group.add(big2);
+  // thin wisps up high, for a bit of layering
+  for (let i = 0; i < 4; i++) {
+    const geo = paintCloud(makeCloudGeometry(80 + i * 4.1, 4, 1.5, 9), '#fffefb', '#e4e9f4');
+    const mesh = new THREE.Mesh(geo, skyMat);
+    const angle = (i / 4) * Math.PI * 2 + 0.8;
+    mesh.position.set(Math.cos(angle) * 95, 44 + noise2(i, 21) * 6, Math.sin(angle) * 95);
+    mesh.scale.set(1.7, 0.5, 1.2);
+    group.add(mesh);
+    drifters.push({ mesh, speed: 0.5 + Math.abs(noise2(i, 17)) * 0.3 });
+  }
+
+  // big warm banks low on the horizon, hazed by distance
+  for (const [x, y, z, s, seed] of [
+    [38, 15, -108, 2.7, 31.7],
+    [-74, 13, 92, 2.3, 44.2],
+    [104, 14, 34, 2.4, 58.9],
+  ]) {
+    const geo = paintCloud(makeCloudGeometry(seed, 6, 3.2, 13), '#fff6e4', '#ddcbaa');
+    const mesh = new THREE.Mesh(geo, hazeMat);
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = noise2(seed, 2) * Math.PI;
+    mesh.scale.setScalar(s);
+    group.add(mesh);
+  }
 
   function update(dt) {
     for (const d of drifters) {
       d.mesh.position.x += d.speed * dt;
-      if (d.mesh.position.x > 150) d.mesh.position.x = -150;
+      if (d.mesh.position.x > 160) d.mesh.position.x = -160;
     }
   }
 
