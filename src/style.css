@@ -218,6 +218,144 @@ body {
   color: #8a5a35;
 }
 
+/* ---------- health ---------- */
+
+.health {
+  position: fixed;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  width: min(210px, 44vw);
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(60, 45, 25, 0.28);
+  overflow: hidden;
+  z-index: 13;
+  transition: opacity 0.4s ease;
+}
+
+.health.hidden {
+  opacity: 0;
+}
+
+.health-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #cf7a53, #e8b06a);
+  transition: width 0.25s ease, background 0.3s ease;
+}
+
+.health-fill.low {
+  background: linear-gradient(90deg, #bb4b3c, #d4705a);
+}
+
+/* ---------- ranking board ---------- */
+
+.board {
+  position: fixed;
+  top: 52px;
+  right: 18px;
+  min-width: 168px;
+  max-width: 210px;
+  padding: 9px 12px 10px;
+  border-radius: 12px;
+  background: rgba(255, 250, 238, 0.72);
+  color: #5b4a2f;
+  font-size: 0.74rem;
+  z-index: 13;
+  backdrop-filter: blur(4px);
+  transition: opacity 0.4s ease;
+}
+
+.board.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.board-title {
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 5px;
+}
+
+.board ol {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.board li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.board li.me {
+  font-weight: 600;
+  color: #3f3320;
+}
+
+.board li.bot {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.board .sc {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- downed notice ---------- */
+
+.downed {
+  position: fixed;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: Georgia, serif;
+  font-size: clamp(1.3rem, 4vw, 1.9rem);
+  color: #fff3e2;
+  text-shadow: 0 2px 14px rgba(60, 30, 10, 0.55);
+  z-index: 14;
+  transition: opacity 0.35s ease;
+}
+
+.downed.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- attack button (touch) ---------- */
+
+.attack-btn {
+  position: fixed;
+  right: 22px;
+  bottom: 104px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 240, 225, 0.5);
+  background: rgba(190, 105, 75, 0.5);
+  font-size: 26px;
+  line-height: 1;
+  display: none;
+  z-index: 15;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.attack-btn.show {
+  display: block;
+}
+
+.attack-btn:active {
+  background: rgba(190, 105, 75, 0.8);
+}
+
 /* ---------- floating proximity prompt ---------- */
 
 .prompt {

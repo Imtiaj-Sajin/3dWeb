@@ -12,6 +12,7 @@ export class Input {
     this.jumpQueued = false;
     this.actionQueued = false;
     this.waveQueued = false;
+    this.attackQueued = false;
     this.pointerX = 0; // -1..1
     this.pointerY = 0;
     this.isTouch = window.matchMedia('(pointer: coarse)').matches;
@@ -38,6 +39,7 @@ export class Input {
       // Q always waves, so you can greet someone while standing by a bench.
       if (e.code === 'KeyE') this.actionQueued = true;
       if (e.code === 'KeyQ') this.waveQueued = true;
+      if (e.code === 'KeyF') this.attackQueued = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -47,6 +49,12 @@ export class Input {
     window.addEventListener('mousemove', (e) => {
       this.pointerX = (e.clientX / window.innerWidth) * 2 - 1;
       this.pointerY = (e.clientY / window.innerHeight) * 2 - 1;
+    });
+    // left click swings, but never when clicking a button or a prompt
+    window.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || !this.enabled) return;
+      if (e.target.closest('button')) return;
+      this.attackQueued = true;
     });
   }
 
@@ -115,11 +123,24 @@ export class Input {
     });
     document.body.append(wave);
     this._waveBtn = wave;
+
+    // attack button (touch)
+    const atk = document.createElement('button');
+    atk.className = 'attack-btn';
+    atk.textContent = '⚔️';
+    atk.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don't spawn the joystick under the button
+      this.attackQueued = true;
+    });
+    document.body.append(atk);
+    this._attackBtn = atk;
   }
 
   enable() {
     this.enabled = true;
-    if (this._waveBtn) this._waveBtn.classList.add('show');
+    this._waveBtn?.classList.add('show');
+    this._attackBtn?.classList.add('show');
   }
 
   consumeAction() {
@@ -134,6 +155,12 @@ export class Input {
     return w;
   }
 
+  consumeAttack() {
+    const a = this.attackQueued;
+    this.attackQueued = false;
+    return a;
+  }
+
   consumeJump() {
     const j = this.jumpQueued;
     this.jumpQueued = false;
@@ -146,6 +173,7 @@ export class Input {
       this.jumpQueued = false;
       this.actionQueued = false;
       this.waveQueued = false;
+      this.attackQueued = false;
       return;
     }
 

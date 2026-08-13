@@ -74,6 +74,21 @@ export class Net {
         case 'look':
           this.h.onLook?.(m.id, m.look);
           break;
+        case 'swing':
+          this.h.onSwing?.(m.id, m.kind);
+          break;
+        case 'hurt':
+          this.h.onHurt?.(m.id, m.hp, m.by);
+          break;
+        case 'died':
+          this.h.onDied?.(m.id, m.by);
+          break;
+        case 'respawn':
+          this.h.onRespawn?.(m.id, m.x, m.z, m.hp);
+          break;
+        case 'board':
+          this.h.onBoard?.(m.board);
+          break;
         case 'idle':
           this.kicked = 'idle';
           break;
@@ -127,6 +142,12 @@ export class Net {
   sendLook(look) {
     if (!this.connected) return;
     this.ws.send(JSON.stringify({ t: 'look', look }));
+  }
+
+  // "I swung." The server decides whether that hit anyone.
+  sendAttack() {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ t: 'atk' }));
   }
 
   // called when the tab is hidden so the server can time the player out

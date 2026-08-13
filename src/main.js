@@ -20,7 +20,16 @@ import {
 } from './characters.js';
 import { Net, serverUrl } from './net.js';
 import { RemoteCharacter, NameTags } from './remote.js';
-import { ANIM, MODELS, TINTS, pickLook, itemsFor } from '../shared/world.js';
+import {
+  ANIM,
+  MODELS,
+  TINTS,
+  pickLook,
+  itemsFor,
+  MAX_HEALTH,
+  weaponOf,
+  inSafeZone,
+} from '../shared/world.js';
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -164,6 +173,42 @@ window.__wa = {
 function setStatus(text, kind = '') {
   status.textContent = text;
   status.className = `status ${kind}`.trim();
+}
+
+// ---------- health, death and the board ----------
+
+const healthEl = document.getElementById('health');
+const healthFill = document.getElementById('health-fill');
+const downedEl = document.getElementById('downed');
+const boardEl = document.getElementById('board');
+const boardList = document.getElementById('board-list');
+let myHp = MAX_HEALTH;
+
+function setHealth(hp) {
+  myHp = Math.max(0, Math.min(MAX_HEALTH, hp));
+  const pct = (myHp / MAX_HEALTH) * 100;
+  healthFill.style.width = `${pct}%`;
+  healthFill.classList.toggle('low', pct <= 35);
+  healthEl.classList.toggle('hidden', !net?.connected);
+}
+
+function renderBoard(rows) {
+  const myId = net?.you?.id;
+  boardList.innerHTML = '';
+  for (const r of rows) {
+    const li = document.createElement('li');
+    if (r.id === myId) li.className = 'me';
+    else if (r.bot) li.className = 'bot';
+    const who = document.createElement('span');
+    who.textContent = r.name;
+    const sc = document.createElement('span');
+    sc.className = 'sc';
+    sc.textContent = String(r.score);
+    sc.title = `${r.waveGot} waves received · ${r.waveGave} given · ${r.kills} kills · ${r.deaths} deaths`;
+    li.append(who, sc);
+    boardList.appendChild(li);
+  }
+  boardEl.classList.toggle('hidden', rows.length === 0);
 }
 
 // roster is the synchronous truth of who should exist. A model may still be
@@ -310,6 +355,7 @@ function connectOrPlaySolo() {
       interactions.items = interactions.items.filter((it) => !it.npc);
       player.root.position.set(m.spawn.x, heightAt(m.spawn.x, m.spawn.z), m.spawn.z);
       setPlayerLook(m.you);
+      setHealth(m.hp ?? MAX_HEALTH);
       for (const who of m.others) addRemote(who);
       setStatus(`you are ${m.you.name}`, 'live');
     },
@@ -326,6 +372,39 @@ function connectOrPlaySolo() {
       for (const [id, x, z, h, a] of list) remotes.get(id)?.applySnapshot(x, z, h, a);
     },
     onEvent: (id, e) => remotes.get(id)?.playEvent(e),
+    onSwing: (id) => {
+      const info = roster.get(id);
+      remotes.get(id)?.playSwing(info?.item ?? null);
+    },
+    onHurt: (id, hp) => {
+      if (id === net?.you?.id) {
+        setHealth(hp);
+        player.takeHit();
+      } else {
+        remotes.get(id)?.playHurt();
+      }
+    },
+    onDied: (id) => {
+      if (id === net?.you?.id) {
+        setHealth(0);
+        player.die();
+        downedEl.classList.remove('hidden');
+      } else {
+        remotes.get(id)?.playDeath();
+      }
+    },
+    onRespawn: (id, x, z, hp) => {
+      if (id === net?.you?.id) {
+        player.root.position.set(x, heightAt(x, z), z);
+        player.velocity.set(0, 0);
+        player.revive();
+        setHealth(hp);
+        downedEl.classList.add('hidden');
+      } else {
+        remotes.get(id)?.reviveAt(x, z);
+      }
+    },
+    onBoard: renderBoard,
     onLook: (id, look) => {
       const info = roster.get(id);
       if (!info) return;
@@ -345,6 +424,9 @@ function connectOrPlaySolo() {
     onClose: (kicked) => {
       for (const id of [...remotes.keys()]) removeRemote(id);
       nameTags.clear();
+      healthEl.classList.add('hidden');
+      boardEl.classList.add('hidden');
+      downedEl.classList.add('hidden');
       playSolo(kicked === 'idle' ? 'you drifted off — reload to rejoin' : 'offline');
     },
   });
@@ -407,8 +489,8 @@ enterBtn.addEventListener('click', () => {
   overlay.classList.add('fade-out');
   input.enable();
   hint.textContent = input.isTouch
-    ? 'drag anywhere to walk · 👋 to wave'
-    : 'WASD move · shift run · space jump · E interact · Q wave';
+    ? 'drag to walk · 👋 wave · ⚔️ attack'
+    : 'WASD move · shift run · space jump · E interact · Q wave · F or click to attack';
   hint.classList.remove('hidden');
   setTimeout(() => hint.classList.add('hidden'), 7000);
 });
@@ -491,6 +573,20 @@ renderer.setAnimationLoop(() => {
       }
     }
     if (input.consumeWave()) player.wave(); // touch 👋 button always waves
+
+    // swinging: played locally straight away so it feels instant, while the
+    // server independently decides whether it actually connected
+    if (input.consumeAttack() && !player.busy) {
+      const w = weaponOf(myLook.item);
+      if (w.damage > 0 && !inSafeZone(player.root.position.x, player.root.position.z)) {
+        if (player.swing(myLook.item)) net?.sendAttack();
+      } else {
+        setStatus(
+          w.damage > 0 ? 'no fighting at the exhibition' : 'nothing to fight with',
+          'warn'
+        );
+      }
+    }
 
     if (player.justWaved) {
       // nearby NPCs pause, turn, and wave back after a beat

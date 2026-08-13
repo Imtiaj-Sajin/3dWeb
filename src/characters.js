@@ -6,7 +6,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { heightAt, roadX, WORLD_RADIUS } from './terrain.js';
-import { SKIN_PART, HELD_ITEM } from '../shared/world.js';
+import { SKIN_PART, HELD_ITEM, ATTACK_CLIPS, weaponOf } from '../shared/world.js';
+
+// pick a swing clip for whatever is in hand; several per melee type so
+// repeated attacks do not look copy-pasted
+export function attackClipFor(item, roll = Math.random()) {
+  const list = ATTACK_CLIPS[weaponOf(item).kind] ?? ATTACK_CLIPS.unarmed;
+  return list[Math.floor(roll * list.length) % list.length];
+}
 
 const CHARACTER_HEIGHT = 1.5;
 const GRAVITY = 16;
@@ -212,6 +219,7 @@ export class Player extends AnimatedCharacter {
     this.heading = Math.PI; // face down the road (toward -z)
     this.root.rotation.y = this.heading;
     // mode: free | emote | interacting | entering | resting | leaving
+    //     | attacking | hurt | dead
     this.mode = 'free';
     this.modeTimer = 0;
     this.rest = null;
@@ -242,6 +250,42 @@ export class Player extends AnimatedCharacter {
     this.velocity.set(0, 0);
     this.play('Cheer', 0.2, true);
     this.justWaved = true;
+  }
+
+  // A swing is played immediately for responsiveness; whether it actually hit
+  // anyone is the server's call, and arrives separately.
+  swing(item) {
+    if (this.mode !== 'free' || !this.grounded) return false;
+    const clip = attackClipFor(item);
+    this.mode = 'attacking';
+    this.modeTimer = this.emoteDuration(clip, 0.8);
+    this.play(clip, 0.1, true);
+    return true;
+  }
+
+  takeHit() {
+    if (this.mode === 'dead') return;
+    const clip = Math.random() < 0.5 ? 'Hit_A' : 'Hit_B';
+    this.mode = 'hurt';
+    this.modeTimer = this.emoteDuration(clip, 0.6);
+    this.rest = null;
+    this.play(clip, 0.08, true);
+  }
+
+  die() {
+    const clip = Math.random() < 0.5 ? 'Death_A' : 'Death_B';
+    this.mode = 'dead';
+    this.modeTimer = Infinity; // held until the server says otherwise
+    this.rest = null;
+    this.velocity.set(0, 0);
+    this.play(clip, 0.12, true);
+  }
+
+  revive() {
+    this.mode = 'free';
+    this.modeTimer = 0;
+    this.current = null;
+    this.play('Idle', 0.2);
   }
 
   // one-shot reach-out gesture, turning to face the object
@@ -298,7 +342,11 @@ export class Player extends AnimatedCharacter {
       const walkingAway =
         input.magnitude > 0.4 && (this.mode === 'emote' || this.mode === 'interacting');
 
-      if (walkingAway) {
+      if (this.mode === 'dead') {
+        this.applyGround(dt);
+        this.mixer.update(dt);
+        return; // nothing to do but lie there
+      } else if (walkingAway) {
         this.mode = 'free';
         this.faceTarget = null;
       } else if (this.mode === 'resting') {

@@ -174,6 +174,105 @@ export const ITEMS = {
 
 export const itemsFor = (model) => ITEMS[model] ?? [];
 
+// ---------- combat ----------
+//
+// The trade-off is reach against damage: thrown and shot things keep you at a
+// distance but land lightly, while anything you have to walk up to hurts.
+// Shields deal nothing and soak a share of what lands on you.
+// Every one of these numbers is enforced on the server, never the client.
+
+export const MAX_HEALTH = 100;
+export const UNARMED = { kind: 'unarmed', reach: 1.5, damage: 7, cooldown: 0.5, block: 0 };
+
+export const WEAPONS = {
+  // short reach, heavy hits
+  Knife: { kind: 'melee1h', reach: 1.7, damage: 17, cooldown: 0.45, block: 0 },
+  '1H_Sword': { kind: 'melee1h', reach: 2.2, damage: 26, cooldown: 0.75, block: 0 },
+  '1H_Axe': { kind: 'melee1h', reach: 2.1, damage: 28, cooldown: 0.8, block: 0 },
+  '2H_Sword': { kind: 'melee2h', reach: 2.7, damage: 38, cooldown: 1.2, block: 0 },
+  '2H_Axe': { kind: 'melee2h', reach: 2.6, damage: 41, cooldown: 1.3, block: 0 },
+
+  // long reach, lighter hits
+  '1H_Crossbow': { kind: 'ranged1h', reach: 15, damage: 15, cooldown: 1.1, block: 0 },
+  '2H_Crossbow': { kind: 'ranged2h', reach: 21, damage: 23, cooldown: 1.7, block: 0 },
+  Throwable: { kind: 'throw', reach: 11, damage: 20, cooldown: 1.0, block: 0 },
+
+  // middling reach
+  '2H_Staff': { kind: 'cast', reach: 10, damage: 22, cooldown: 1.0, block: 0 },
+  '1H_Wand': { kind: 'cast', reach: 7.5, damage: 14, cooldown: 0.55, block: 0 },
+  Spellbook: { kind: 'cast', reach: 6.5, damage: 13, cooldown: 0.65, block: 0 },
+  Spellbook_open: { kind: 'cast', reach: 6.5, damage: 13, cooldown: 0.65, block: 0 },
+
+  // shields cannot attack, but halve what reaches you
+  Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
+  Badge_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.4 },
+  Spike_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
+  Rectangle_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.55 },
+  Barbarian_Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
+
+  // not a weapon; you may simply enjoy your drink
+  Mug: { kind: 'none', reach: 0, damage: 0, cooldown: 1, block: 0 },
+};
+
+export const weaponOf = (item) => WEAPONS[item] ?? UNARMED;
+
+// only things that can actually hurt someone are handed out on arrival
+export const ARMED_ITEMS = Object.keys(WEAPONS).filter((k) => WEAPONS[k].damage > 0);
+
+// A swing only counts if the target is roughly in front of you.
+export const ATTACK_ARC = Math.PI / 3; // 60 degrees either side
+
+// Which clip plays for a swing. Several melee options so repeated attacks do
+// not look identical.
+export const ATTACK_CLIPS = {
+  unarmed: ['Unarmed_Melee_Attack_Punch_A', 'Unarmed_Melee_Attack_Punch_B', 'Unarmed_Melee_Attack_Kick'],
+  melee1h: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Stab'],
+  melee2h: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice', '2H_Melee_Attack_Spin'],
+  ranged1h: ['1H_Ranged_Shoot'],
+  ranged2h: ['2H_Ranged_Shoot'],
+  throw: ['Throw'],
+  cast: ['Spellcast_Shoot'],
+  shield: ['Block'],
+  none: ['Interact'],
+};
+
+// ---------- the peaceful ground ----------
+//
+// The exhibition and its surroundings. Nobody can be hurt here, and nobody
+// resting anywhere can be hurt either — you can always put yourself somewhere
+// that the fighting cannot reach.
+
+export const SHOWROOM_Z = 8;
+export const SHOWROOM_X = roadX(SHOWROOM_Z) + 15;
+export const SAFE_RADIUS = 17;
+
+export const inSafeZone = (x, z) =>
+  Math.hypot(x - SHOWROOM_X, z - SHOWROOM_Z) < SAFE_RADIUS;
+
+export const RESTING_ANIMS = new Set([ANIM.SIT_CHAIR, ANIM.SIT_FLOOR, ANIM.LIE]);
+
+// Sitting down is a truce, wherever you are.
+export const isProtected = (e) => inSafeZone(e.x, e.z) || RESTING_ANIMS.has(e.a);
+
+// ---------- ranking ----------
+//
+// Deliberately weighted so the top of the board is whoever people liked, not
+// whoever killed most: being waved at beats waving, which beats fighting.
+
+export const SCORE_WEIGHTS = { waveGot: 4, waveGave: 2, kills: 1, deaths: -0.5 };
+
+export function scoreOf(s) {
+  return (
+    (s.waveGot ?? 0) * SCORE_WEIGHTS.waveGot +
+    (s.waveGave ?? 0) * SCORE_WEIGHTS.waveGave +
+    (s.kills ?? 0) * SCORE_WEIGHTS.kills +
+    (s.deaths ?? 0) * SCORE_WEIGHTS.deaths
+  );
+}
+
+export const RESPAWN_MS = 3500;
+export const WAVE_RANGE = 10;
+
 // Never tint these — a green face reads as a bug, not as variety.
 export const SKIN_PART = /head|face|hair/i;
 

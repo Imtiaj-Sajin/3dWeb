@@ -86,6 +86,37 @@ the interactable list.
 - `src/sky.js` — gradient sky dome, drifting low-poly clouds, birds following
   a closed curve.
 
+## Combat and ranking
+
+You arrive already carrying a weapon your character can hold. **F or left
+click** swings it; on touch there is a ⚔️ button.
+
+Weapons trade reach against damage — see `WEAPONS` in `shared/world.js`.
+Crossbows and thrown things reach far and land lightly; swords and axes need
+you close but hurt. Shields deal nothing and soak a share of what lands on
+you. Mugs are for drinking.
+
+**Nothing about a fight is decided by the browser.** The client only ever says
+"I swung"; the server checks cooldown, reach, facing arc and who is protected
+against its own copy of everyone's position, then decides the hit. A client
+claiming a kill, or claiming to be unhurt, is simply ignored.
+
+Two places are peaceful, checked server-side:
+
+- the exhibition clearing (`SAFE_RADIUS` around the showroom)
+- anyone sitting or lying down, anywhere
+
+so you can always put yourself somewhere the fighting cannot reach.
+
+Dying plays a death animation, then you get up a few seconds later somewhere
+on the road with full health.
+
+The board ranks whoever is currently connected, weighted so that **being waved
+at beats waving, which beats fighting** (`SCORE_WEIGHTS`). It is entirely
+possible — and intended — for someone who just got killed to outrank the
+person who killed them. Stats live in the server's memory and vanish when you
+disconnect: no database, nothing to recover, same as everything else here.
+
 ## Characters
 
 Five models (Rogue, Knight, Barbarian, Mage, Hooded Rogue), each combined with

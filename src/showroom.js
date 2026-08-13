@@ -10,12 +10,12 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { heightAt, roadX } from './terrain.js';
-import { MODELS, TINTS } from '../shared/world.js';
+import { heightAt } from './terrain.js';
+import { MODELS, TINTS, SHOWROOM_X, SHOWROOM_Z } from '../shared/world.js';
 
-// Sits in the meadow beside the road, close enough to spot on the way past.
-export const SHOWROOM_Z = 8;
-export const SHOWROOM_X = roadX(SHOWROOM_Z) + 15;
+// Position comes from shared/ because the server needs it too: this clearing
+// is the safe zone, and both sides must agree on exactly where it is.
+export { SHOWROOM_X, SHOWROOM_Z };
 export const STATUE_RANGE = 46; // how near you must be before statues load
 
 const PLINTH_R = 6.4;

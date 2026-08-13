@@ -22,6 +22,14 @@ import {
   pickLook,
   itemsFor,
   makeName,
+  MAX_HEALTH,
+  RESPAWN_MS,
+  WAVE_RANGE,
+  ATTACK_ARC,
+  ARMED_ITEMS,
+  weaponOf,
+  isProtected,
+  scoreOf,
 } from '../shared/world.js';
 
 const PORT = Number(process.env.PORT) || 8787;
@@ -38,6 +46,17 @@ const bots = [];
 
 const now = () => Date.now();
 const rand = (a, b) => a + Math.random() * (b - a);
+const round2 = (n) => Math.round(n * 100) / 100;
+
+const freshStats = () => ({ kills: 0, deaths: 0, waveGave: 0, waveGot: 0 });
+
+// hand someone a weapon their own character can actually hold
+function randomWeaponFor(model) {
+  const usable = itemsFor(model)
+    .map((i) => i.node)
+    .filter((n) => ARMED_ITEMS.includes(n));
+  return usable.length ? usable[Math.floor(Math.random() * usable.length)] : null;
+}
 
 function takenNames() {
   const s = new Set(bots.map((b) => b.name));
@@ -68,6 +87,10 @@ function spawnBot(i) {
     name: uniqueName(),
     ...pickLook(),
     model: MODELS[i % MODELS.length], // one of each, so the bots never twin
+    hp: MAX_HEALTH,
+    dead: false,
+    respawnAt: 0,
+    stats: freshStats(),
     x: roadX(z) + rand(-BOT_LANE, BOT_LANE),
     z,
     h: Math.PI,
@@ -78,6 +101,8 @@ function spawnBot(i) {
     tz: 0,
     speed: rand(1.3, 1.7),
   };
+  // bots carry gear and can be fought, but never start a fight themselves
+  bot.item = randomWeaponFor(bot.model);
   bots.push(bot);
 }
 
@@ -143,6 +168,7 @@ const meta = (e) => ({
   bot: !!e.bot,
 });
 
+
 // The showroom is free but the server still validates: a client may only ask
 // for a model, tint and item that actually exist, and an item its own
 // character can hold.
@@ -175,6 +201,80 @@ function broadcast(msg, exceptId = null) {
   }
 }
 
+// ---------- combat ----------
+//
+// The client only ever says "I swung". Everything that decides whether that
+// hurt anybody — cooldown, reach, facing, who is protected — happens here,
+// because a browser will happily claim whatever it likes.
+
+function resolveAttack(attacker) {
+  const t = now();
+  if (attacker.dead) return;
+
+  const w = weaponOf(attacker.item);
+  if (w.damage <= 0) return; // shields and mugs swing at nothing
+  if (t - attacker.lastSwing < w.cooldown * 1000) return;
+  attacker.lastSwing = t;
+  attacker.lastActive = t;
+
+  // the swing itself is always shown, hit or miss
+  broadcast({ t: 'swing', id: attacker.id, kind: w.kind });
+
+  if (isProtected(attacker)) return; // no swinging out from safety
+
+  // nearest valid target within reach and roughly in front
+  let best = null;
+  let bestD = Infinity;
+  for (const target of [...players.values(), ...bots]) {
+    if (target === attacker || target.dead) continue;
+    if (isProtected(target)) continue;
+
+    const dx = target.x - attacker.x;
+    const dz = target.z - attacker.z;
+    const d = Math.hypot(dx, dz);
+    if (d > w.reach || d >= bestD) continue;
+
+    // heading is the direction the attacker faces; compare with the bearing
+    // to the target and require it inside the arc
+    let off = Math.atan2(dx, dz) - attacker.h;
+    while (off > Math.PI) off -= Math.PI * 2;
+    while (off < -Math.PI) off += Math.PI * 2;
+    if (Math.abs(off) > ATTACK_ARC) continue;
+
+    best = target;
+    bestD = d;
+  }
+  if (!best) return;
+
+  const soak = weaponOf(best.item).block ?? 0;
+  const dealt = Math.max(1, Math.round(w.damage * (1 - soak)));
+  best.hp = (best.hp ?? MAX_HEALTH) - dealt;
+  broadcast({ t: 'hurt', id: best.id, by: attacker.id, hp: Math.max(0, best.hp) });
+
+  if (best.hp > 0) return;
+
+  best.dead = true;
+  best.hp = 0;
+  best.respawnAt = t + RESPAWN_MS;
+  best.stats ??= freshStats();
+  best.stats.deaths++;
+  attacker.stats.kills++;
+  if (best.bot) {
+    best.state = 'idle';
+    best.timer = RESPAWN_MS / 1000;
+  }
+  broadcast({ t: 'died', id: best.id, by: attacker.id });
+}
+
+function respawn(e) {
+  const z = rand(ROAD_Z_MIN, ROAD_Z_MAX);
+  e.x = roadX(z) + rand(-BOT_LANE, BOT_LANE);
+  e.z = z;
+  e.hp = MAX_HEALTH;
+  e.dead = false;
+  broadcast({ t: 'respawn', id: e.id, x: round2(e.x), z: round2(e.z), hp: e.hp });
+}
+
 // ---------- connections ----------
 
 const wss = new WebSocketServer({ port: PORT });
@@ -194,7 +294,11 @@ wss.on('connection', (ws) => {
     ws,
     name: uniqueName(),
     ...pickLook(),
-    item: null, // everyone arrives empty-handed; the showroom changes that
+    hp: MAX_HEALTH,
+    dead: false,
+    respawnAt: 0,
+    lastSwing: 0,
+    stats: freshStats(),
     x: roadX(spawnZ),
     z: spawnZ,
     h: Math.PI,
@@ -202,12 +306,14 @@ wss.on('connection', (ws) => {
     lastActive: now(),
     alive: true,
   };
+  player.item = randomWeaponFor(player.model); // arrive already carrying something
   players.set(id, player);
 
   send(ws, {
     t: 'welcome',
     you: meta(player),
     spawn: { x: player.x, z: player.z },
+    hp: player.hp,
     others: [...bots, ...[...players.values()].filter((p) => p.id !== id)].map(meta),
   });
   broadcast({ t: 'join', who: meta(player) }, id);
@@ -230,6 +336,8 @@ wss.on('connection', (ws) => {
       player.h = m.h;
       player.a = m.a;
       if (moved) player.lastActive = now();
+    } else if (m.t === 'atk') {
+      resolveAttack(player);
     } else if (m.t === 'look') {
       const look = sanitizeLook(m.look, player);
       if (!look) return;
@@ -239,14 +347,22 @@ wss.on('connection', (ws) => {
     } else if (m.t === 'ev') {
       player.lastActive = now();
       broadcast({ t: 'ev', id, e: m.e }, id);
-      // bots near a wave turn and wave back
       if (m.e === 'wave') {
+        player.stats.waveGave++;
+        // bots near a wave turn and wave back
         for (const b of bots) {
-          if (b.state === 'greet') continue;
-          if (Math.hypot(b.x - player.x, b.z - player.z) < 10) {
+          if (b.state === 'greet' || b.dead) continue;
+          if (Math.hypot(b.x - player.x, b.z - player.z) < WAVE_RANGE) {
             b.state = 'greet';
             b.timer = 1.6;
             b.h = Math.atan2(player.x - b.x, player.z - b.z);
+          }
+        }
+        // everyone within earshot was waved at
+        for (const other of players.values()) {
+          if (other === player || other.dead) continue;
+          if (Math.hypot(other.x - player.x, other.z - player.z) < WAVE_RANGE) {
+            other.stats.waveGot++;
           }
         }
       }
@@ -272,19 +388,38 @@ wss.on('connection', (ws) => {
 // ---------- ticks ----------
 
 let last = now();
+let lastBoard = 0;
 setInterval(() => {
   const t = now();
   const dt = Math.min((t - last) / 1000, 0.25);
   last = t;
 
-  for (const b of bots) updateBot(b, dt);
+  for (const e of [...bots, ...players.values()]) {
+    if (e.dead && t >= e.respawnAt) respawn(e);
+  }
+  for (const b of bots) if (!b.dead) updateBot(b, dt);
 
-  const round = (n) => Math.round(n * 100) / 100;
   const entities = [];
   for (const e of [...bots, ...players.values()]) {
-    entities.push([e.id, round(e.x), round(e.z), round(e.h), e.a]);
+    entities.push([e.id, round2(e.x), round2(e.z), round2(e.h), e.a]);
   }
   broadcast({ t: 'snap', e: entities });
+
+  // the board, a couple of times a second
+  if (t - lastBoard > 1500) {
+    lastBoard = t;
+    const board = [...players.values(), ...bots]
+      .map((e) => ({
+        id: e.id,
+        name: e.name,
+        bot: !!e.bot,
+        ...(e.stats ?? freshStats()),
+        score: Math.round(scoreOf(e.stats ?? {}) * 10) / 10,
+      }))
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      .slice(0, 12);
+    broadcast({ t: 'board', board });
+  }
 
   // kick the idle: they are on another tab and not coming back
   for (const p of [...players.values()]) {

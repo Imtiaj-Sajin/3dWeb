@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
-import { applyLook } from './characters.js';
+import { applyLook, attackClipFor } from './characters.js';
 import { ANIM, ANIM_CLIP } from '../shared/world.js';
 
 function damp(k, dt) {
@@ -37,6 +37,8 @@ export class RemoteCharacter {
     this.emote = 0; // seconds left on a one-off gesture
     this.spawned = false;
     this.visible = true;
+    this.dead = false;
+    this.item = info.item ?? null;
 
     // You collide with them, but you never push them: the server owns where
     // they are, and shoving them locally would just fight the next snapshot.
@@ -104,6 +106,34 @@ export class RemoteCharacter {
     }
   }
 
+  playSwing(item) {
+    if (this.dead) return;
+    const clip = attackClipFor(item);
+    this.emote = Math.max(this.emote, 0.75);
+    this.play(clip, 0.1, true);
+  }
+
+  playHurt() {
+    if (this.dead) return;
+    this.emote = Math.max(this.emote, 0.5);
+    this.play(Math.random() < 0.5 ? 'Hit_A' : 'Hit_B', 0.08, true);
+  }
+
+  playDeath() {
+    this.dead = true;
+    this.emote = Infinity; // held until the server respawns them
+    this.play(Math.random() < 0.5 ? 'Death_A' : 'Death_B', 0.12, true);
+  }
+
+  reviveAt(x, z) {
+    this.dead = false;
+    this.emote = 0;
+    this.spawned = false; // reappear at the new spot rather than sliding there
+    this.applySnapshot(x, z, this.targetHeading, this.anim);
+    this.current = null;
+    this.play('Idle', 0.2);
+  }
+
   update(dt) {
     const p = this.root.position;
     p.x += (this.target.x - p.x) * damp(11, dt);
@@ -113,7 +143,9 @@ export class RemoteCharacter {
 
     this.root.rotation.y = angleLerp(this.root.rotation.y, this.targetHeading, damp(9, dt));
 
-    if (this.emote > 0) {
+    if (this.dead) {
+      // hold the death pose; the server decides when they get up
+    } else if (this.emote > 0) {
       this.emote -= dt;
     } else {
       this.play(ANIM_CLIP[this.anim] ?? 'Idle', 0.25);
