@@ -6,6 +6,12 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { heightAt, roadDist, roadX, groundColorAt } from './terrain.js';
 import { fbm2 } from './noise.js';
+import { makeRng, WORLD_SEED } from './rng.js';
+
+// Every placement decision in this file draws from here, so the meadow is
+// laid out identically for every player. Reset at the top of buildScatter so
+// repeated calls reproduce the same world.
+let rng = makeRng(WORLD_SEED);
 
 // ---------- geometry helpers ----------
 
@@ -163,7 +169,7 @@ function makeGrassTuft() {
 const _lit = new THREE.Color();
 function litGroundColor(x, z) {
   groundColorAt(x, z, _lit);
-  const jitter = 0.95 + Math.random() * 0.1;
+  const jitter = 0.95 + rng() * 0.1;
   _lit.r = Math.min(1, _lit.r * 1.7 * jitter);
   _lit.g = Math.min(1, _lit.g * 1.75 * jitter);
   _lit.b = Math.min(1, _lit.b * 1.6 * jitter);
@@ -256,12 +262,12 @@ const _c = new THREE.Color();
 function scatterInstanced(geo, material, tries, accept, opts = {}) {
   const placed = [];
   for (let i = 0; i < tries; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.sqrt(Math.random()) * 100;
+    const a = rng() * Math.PI * 2;
+    const r = Math.sqrt(rng()) * 100;
     const x = Math.cos(a) * r;
     const z = Math.sin(a) * r;
     if (!accept(x, z)) continue;
-    placed.push({ x, z, s: opts.scale ? opts.scale() : 1, rot: Math.random() * Math.PI * 2 });
+    placed.push({ x, z, s: opts.scale ? opts.scale() : 1, rot: rng() * Math.PI * 2 });
   }
   const mesh = new THREE.InstancedMesh(geo, material, placed.length);
   placed.forEach((it, i) => {
@@ -273,7 +279,7 @@ function scatterInstanced(geo, material, tries, accept, opts = {}) {
     if (opts.tintAt) {
       mesh.setColorAt(i, opts.tintAt(it.x, it.z));
     } else {
-      mesh.setColorAt(i, _c.setScalar(0.93 + Math.random() * 0.12));
+      mesh.setColorAt(i, _c.setScalar(0.93 + rng() * 0.12));
     }
   });
   mesh.instanceMatrix.needsUpdate = true;
@@ -282,6 +288,8 @@ function scatterInstanced(geo, material, tries, accept, opts = {}) {
 }
 
 export function buildScatter({ isMobile, avoid = [] }) {
+  rng = makeRng(WORLD_SEED); // same meadow on every load, for every player
+
   const group = new THREE.Group();
   group.name = 'scatter';
   const colliders = [];
@@ -307,7 +315,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
       makeFoliageMaterial(timeUniform, { pivot: 1.4, top: 3.8, amp: 0.07 }),
       treeBudget[v],
       (x, z) => roadDist(x, z) > 9 && Math.hypot(x, z) > 12 && !nearAvoid(x, z, 1.8),
-      { scale: () => 0.8 + Math.random() * 0.7 }
+      { scale: () => 0.8 + rng() * 0.7 }
     );
     mesh.castShadow = true;
     group.add(mesh);
@@ -323,7 +331,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
       makeFoliageMaterial(timeUniform, { pivot: 0.15, top: 1.0, amp: 0.035 }),
       isMobile ? 30 : 44,
       (x, z) => roadDist(x, z) > 6.2 && !nearAvoid(x, z, 1.2),
-      { scale: () => 0.7 + Math.random() * 1.1 }
+      { scale: () => 0.7 + rng() * 1.1 }
     );
     mesh.castShadow = true;
     group.add(mesh);
@@ -335,7 +343,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
     flatWhite(),
     isMobile ? 26 : 40,
     (x, z) => roadDist(x, z) > 5 && !nearAvoid(x, z, 1.6),
-    { scale: () => 0.35 + Math.random() * 1.3, sink: -0.15 }
+    { scale: () => 0.35 + rng() * 1.3, sink: -0.15 }
   );
   rocks.castShadow = true;
   group.add(rocks);
@@ -349,7 +357,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
     const b = new THREE.Mesh(boulderGeo, flatWhite());
     b.position.set(bx, heightAt(bx, bz) - 0.3, bz);
     b.scale.setScalar(bs);
-    b.rotation.y = Math.random() * Math.PI;
+    b.rotation.y = rng() * Math.PI;
     b.castShadow = true;
     b.receiveShadow = true;
     group.add(b);
@@ -373,7 +381,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
   for (const [px, pz] of [[52, 14], [-58, -34]]) {
     const palm = new THREE.Mesh(palmGeo, flatWhite());
     palm.position.set(px, heightAt(px, pz) - 0.1, pz);
-    palm.rotation.y = Math.random() * Math.PI * 2;
+    palm.rotation.y = rng() * Math.PI * 2;
     palm.scale.setScalar(1.15);
     palm.castShadow = true;
     group.add(palm);
@@ -403,9 +411,9 @@ export function buildScatter({ isMobile, avoid = [] }) {
       if (heightAt(x, z) > 9) return false; // not on the bare dune tops
       if (nearAvoid(x, z, 0.6)) return false;
       // avoid the sandy noise patches so grass sits on green
-      return fbm2(x * 0.05 + 31, z * 0.05 + 17) < 0.45 || Math.random() < 0.2;
+      return fbm2(x * 0.05 + 31, z * 0.05 + 17) < 0.45 || rng() < 0.2;
     },
-    { scale: () => 0.6 + Math.random() * 0.6, tintAt: litGroundColor }
+    { scale: () => 0.6 + rng() * 0.6, tintAt: litGroundColor }
   );
   group.add(grass);
 
@@ -423,7 +431,7 @@ export function buildScatter({ isMobile, avoid = [] }) {
         // clump them, so they read as patches rather than confetti
         return fbm2(x * 0.09 + 61, z * 0.09 + 13) > 0.24;
       },
-      { scale: () => 0.8 + Math.random() * 0.6 }
+      { scale: () => 0.8 + rng() * 0.6 }
     );
     group.add(mesh);
   }
