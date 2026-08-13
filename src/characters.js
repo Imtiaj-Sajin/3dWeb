@@ -86,14 +86,26 @@ class AnimatedCharacter {
     this.grounded = true;
   }
 
-  play(name, fade = 0.22) {
+  play(name, fade = 0.22, once = false) {
     if (this.current === name || !this.actions[name]) return;
     const next = this.actions[name];
-    next.reset().fadeIn(fade).play();
+    next.reset();
+    if (once) {
+      next.setLoop(THREE.LoopOnce, 1);
+      next.clampWhenFinished = true; // hold the last pose while fading out
+    } else {
+      next.setLoop(THREE.LoopRepeat, Infinity);
+      next.clampWhenFinished = false;
+    }
+    next.fadeIn(fade).play();
     if (this.current && this.actions[this.current]) {
       this.actions[this.current].fadeOut(fade);
     }
     this.current = name;
+  }
+
+  emoteDuration(name, fallback = 1.2) {
+    return this.actions[name] ? this.actions[name].getClip().duration : fallback;
   }
 
   resolveCollisions(colliders) {
@@ -145,6 +157,8 @@ export class Player extends AnimatedCharacter {
     this.root.position.set(roadX(30), heightAt(roadX(30), 30), 30);
     this.heading = Math.PI; // face down the road (toward -z)
     this.root.rotation.y = this.heading;
+    this.emoteTimer = 0;
+    this.justWaved = false;
     this.play('Idle', 0);
   }
 
@@ -192,9 +206,23 @@ export class Player extends AnimatedCharacter {
       this.root.rotation.y = this.heading;
     }
 
+    // wave emote (E key / touch button) — only while standing still
+    this.justWaved = false;
+    if (input.consumeWave() && this.grounded && speed < 1 && this.emoteTimer <= 0) {
+      this.emoteTimer = this.emoteDuration('Cheer') - 0.15;
+      this.play('Cheer', 0.2, true);
+      this.justWaved = true;
+    }
+    if (this.emoteTimer > 0) {
+      this.emoteTimer -= dt;
+      if (speed > 1 || !this.grounded) this.emoteTimer = 0; // moving cancels it
+    }
+
     // animation state
     if (!this.grounded) {
       this.play('Jump_Idle', 0.15);
+    } else if (this.emoteTimer > 0) {
+      // let the wave play out
     } else if (speed > 3.2) {
       this.play('Running_A');
     } else if (speed > 0.3) {
@@ -219,6 +247,10 @@ export class NPC extends AnimatedCharacter {
     this.timer = 1 + (seed % 3);
     this.target = new THREE.Vector2(x, z);
     this.speed = 1.5;
+    this.greetCooldown = 0;
+    this.greetDelay = 0;
+    this.greetTimer = -1;
+    this.greetFrom = new THREE.Vector3();
     this.play('Idle', 0);
     // desync animation phases between clones
     if (this.actions.Idle) this.actions.Idle.time = seed * 0.7;
@@ -235,8 +267,44 @@ export class NPC extends AnimatedCharacter {
     this.target.set(x, z);
   }
 
+  // called when the player waves nearby: pause, turn, wave back
+  reactWave(fromPos, delay) {
+    if (this.greetCooldown > 0) return;
+    this.greetCooldown = 6;
+    this.state = 'greet';
+    this.greetDelay = delay;
+    this.greetTimer = -1;
+    this.greetFrom.copy(fromPos);
+  }
+
   update(dt, colliders) {
     const p = this.root.position;
+    this.greetCooldown = Math.max(0, this.greetCooldown - dt);
+
+    if (this.state === 'greet') {
+      this.greetDelay -= dt;
+      if (this.greetDelay > 0) {
+        this.play('Idle', 0.25);
+      } else {
+        // turn toward whoever waved
+        const dx = this.greetFrom.x - p.x;
+        const dz = this.greetFrom.z - p.z;
+        this.heading = angleLerp(this.heading, Math.atan2(dx, dz), damp(6, dt));
+        this.root.rotation.y = this.heading;
+        if (this.greetTimer < 0) {
+          this.greetTimer = this.emoteDuration('Cheer') - 0.1;
+          this.play('Cheer', 0.2, true);
+        } else {
+          this.greetTimer -= dt;
+          if (this.greetTimer <= 0) {
+            this.state = 'idle';
+            this.timer = 1 + Math.random() * 2;
+          }
+        }
+      }
+      this.mixer.update(dt);
+      return;
+    }
 
     if (this.state === 'idle') {
       this.timer -= dt;

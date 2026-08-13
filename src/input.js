@@ -10,6 +10,7 @@ export class Input {
     this.magnitude = 0;
     this.running = false;
     this.jumpQueued = false;
+    this.waveQueued = false;
     this.pointerX = 0; // -1..1
     this.pointerY = 0;
     this.isTouch = window.matchMedia('(pointer: coarse)').matches;
@@ -32,6 +33,7 @@ export class Input {
         this.jumpQueued = true;
         e.preventDefault();
       }
+      if (e.code === 'KeyE') this.waveQueued = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -97,6 +99,29 @@ export class Input {
     window.addEventListener('touchend', end);
     window.addEventListener('touchcancel', end);
     this._joyVec = { x: 0, y: 0 };
+
+    // wave button (touch only)
+    const wave = document.createElement('button');
+    wave.className = 'wave-btn';
+    wave.textContent = '👋';
+    wave.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don't spawn the joystick under the button
+      this.waveQueued = true;
+    });
+    document.body.append(wave);
+    this._waveBtn = wave;
+  }
+
+  enable() {
+    this.enabled = true;
+    if (this._waveBtn) this._waveBtn.classList.add('show');
+  }
+
+  consumeWave() {
+    const w = this.waveQueued;
+    this.waveQueued = false;
+    return w;
   }
 
   consumeJump() {
@@ -109,6 +134,7 @@ export class Input {
     if (!this.enabled) {
       this.moveX = this.moveY = this.magnitude = 0;
       this.jumpQueued = false;
+      this.waveQueued = false;
       return;
     }
 

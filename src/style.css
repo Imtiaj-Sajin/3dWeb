@@ -162,6 +162,32 @@ body {
   z-index: 16;
 }
 
+/* ---------- wave button (touch) ---------- */
+
+.wave-btn {
+  position: fixed;
+  right: 22px;
+  bottom: 30px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 250, 238, 0.55);
+  background: rgba(255, 250, 238, 0.55);
+  font-size: 28px;
+  line-height: 1;
+  display: none;
+  z-index: 15;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wave-btn.show {
+  display: block;
+}
+
+.wave-btn:active {
+  background: rgba(255, 250, 238, 0.85);
+}
+
 /* ---------- vignette ---------- */
 
 .vignette {

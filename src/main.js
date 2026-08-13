@@ -118,10 +118,10 @@ loadCharacterGLBs(manager, ['Rogue', 'Knight', 'Barbarian'])
 
 enterBtn.addEventListener('click', () => {
   overlay.classList.add('fade-out');
-  input.enabled = true;
+  input.enable();
   hint.textContent = input.isTouch
-    ? 'drag anywhere to walk'
-    : 'WASD to walk · shift to run · space to jump';
+    ? 'drag anywhere to walk · 👋 to wave'
+    : 'WASD to walk · shift to run · space to jump · E to wave';
   hint.classList.remove('hidden');
   setTimeout(() => hint.classList.add('hidden'), 7000);
 });
@@ -150,6 +150,14 @@ renderer.setAnimationLoop(() => {
 
   if (player) {
     player.update(dt, input, rig.yaw, colliders);
+    if (player.justWaved) {
+      // nearby NPCs pause, turn, and wave back after a beat
+      for (const npc of npcs) {
+        if (npc.root.position.distanceTo(player.root.position) < 10) {
+          npc.reactWave(player.root.position, 0.35 + Math.random() * 0.5);
+        }
+      }
+    }
     for (const npc of npcs) npc.update(dt, colliders);
     rig.update(dt, player, input);
 
