@@ -79,6 +79,12 @@ Walk close to a bench, boulder, palm, street lamp, barrier, or another
 character and a prompt appears above it saying what E will do. Greeting someone
 makes them stop, turn to face you, and wave back.
 
+At the exhibition, every character stands on a plinth and every item sits on
+its own gear stand — the display copies are lifted straight out of the models
+they are rigged to, so what you see on the stand is exactly what ends up in
+your hand. Items belong to their character, and a stand you cannot use says
+whose it is rather than staying silent.
+
 Debug helpers: `?x=&z=` URL params teleport the player (`?z=-52` lands at the
 benches), and `__wa` in the browser console exposes the scene, player, NPCs, and
 the interactable list.

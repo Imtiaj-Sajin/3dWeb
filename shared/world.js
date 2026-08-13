@@ -174,6 +174,25 @@ export const ITEMS = {
 
 export const itemsFor = (model) => ITEMS[model] ?? [];
 
+// Every distinct item once, tagged with a model that can hold it, in owner
+// order. The showroom puts one on display per entry, so identical gear shared
+// between two characters (the two Rogues) is not exhibited twice.
+export const EXHIBITS = (() => {
+  const seen = new Set();
+  const out = [];
+  for (const model of MODELS) {
+    for (const item of itemsFor(model)) {
+      if (seen.has(item.node)) continue;
+      seen.add(item.node);
+      out.push({ ...item, model });
+    }
+  }
+  return out;
+})();
+
+// which characters can carry a given item
+export const holdersOf = (node) => MODELS.filter((m) => itemsFor(m).some((i) => i.node === node));
+
 // ---------- combat ----------
 //
 // The trade-off is reach against damage: thrown and shot things keep you at a
@@ -203,12 +222,14 @@ export const WEAPONS = {
   Spellbook: { kind: 'cast', reach: 6.5, damage: 13, cooldown: 0.65, block: 0 },
   Spellbook_open: { kind: 'cast', reach: 6.5, damage: 13, cooldown: 0.65, block: 0 },
 
-  // shields cannot attack, but halve what reaches you
-  Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
-  Badge_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.4 },
-  Spike_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
-  Rectangle_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.55 },
-  Barbarian_Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.45 },
+  // Shields cannot hit back at all, but almost nothing gets through them.
+  // Carrying one is a real choice: near-immunity in exchange for being unable
+  // to fight. A hit always does at least 1, so a turtle is never invincible.
+  Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.8 },
+  Badge_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.75 },
+  Spike_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.8 },
+  Rectangle_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.9 },
+  Barbarian_Round_Shield: { kind: 'shield', reach: 0, damage: 0, cooldown: 1, block: 0.8 },
 
   // not a weapon; you may simply enjoy your drink
   Mug: { kind: 'none', reach: 0, damage: 0, cooldown: 1, block: 0 },
@@ -242,9 +263,11 @@ export const ATTACK_CLIPS = {
 // resting anywhere can be hurt either — you can always put yourself somewhere
 // that the fighting cannot reach.
 
+// Set well back from the road: close enough to spot on the way past, far
+// enough that nobody walks through the exhibition by accident.
 export const SHOWROOM_Z = 8;
-export const SHOWROOM_X = roadX(SHOWROOM_Z) + 15;
-export const SAFE_RADIUS = 17;
+export const SHOWROOM_X = roadX(SHOWROOM_Z) + 30;
+export const SAFE_RADIUS = 21;
 
 export const inSafeZone = (x, z) =>
   Math.hypot(x - SHOWROOM_X, z - SHOWROOM_Z) < SAFE_RADIUS;

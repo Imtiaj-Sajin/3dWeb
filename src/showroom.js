@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { heightAt } from './terrain.js';
-import { MODELS, TINTS, SHOWROOM_X, SHOWROOM_Z } from '../shared/world.js';
+import { MODELS, TINTS, EXHIBITS, SHOWROOM_X, SHOWROOM_Z } from '../shared/world.js';
 
 // Position comes from shared/ because the server needs it too: this clearing
 // is the safe zone, and both sides must agree on exactly where it is.
@@ -21,6 +21,13 @@ export const STATUE_RANGE = 46; // how near you must be before statues load
 const PLINTH_R = 6.4;
 const ARC_FROM = -Math.PI * 0.72;
 const ARC_TO = Math.PI * 0.12;
+
+// gear stands sit on a wider ring behind the characters, in the same order,
+// so a character's kit is always the group nearest to them
+const ITEM_R = 11.4;
+const ITEM_FROM = -Math.PI * 0.8;
+const ITEM_TO = Math.PI * 0.2;
+export const ITEM_DISPLAY_Y = 0.86; // top of a gear stand, in local units
 
 function paint(geo, color) {
   const c = new THREE.Color(color);
@@ -44,6 +51,25 @@ function merge(geos) {
     }),
     false
   );
+}
+
+// where each gear stand sits, one per distinct item, plus a bare stand at the
+// front for putting whatever you carry back down
+export function itemSpots() {
+  const entries = [{ node: null, label: 'nothing', model: null }, ...EXHIBITS];
+  return entries.map((entry, i) => {
+    const t = entries.length > 1 ? i / (entries.length - 1) : 0.5;
+    const a = ITEM_FROM + (ITEM_TO - ITEM_FROM) * t;
+    const x = SHOWROOM_X + Math.cos(a) * ITEM_R;
+    const z = SHOWROOM_Z + Math.sin(a) * ITEM_R;
+    return {
+      ...entry,
+      x,
+      z,
+      y: heightAt(x, z),
+      facing: Math.atan2(SHOWROOM_X - x, SHOWROOM_Z - z),
+    };
+  });
 }
 
 // where each character plinth stands
@@ -90,9 +116,10 @@ export function buildShowroom() {
   // ---------- colour posts ----------
 
   // a low arc of painted posts in front of the plinths
+  // opposite side of the ring from the characters and their gear
   TINTS.forEach((tint, i) => {
-    const a = -Math.PI * 0.62 + (i / (TINTS.length - 1)) * Math.PI * 0.62;
-    const r = PLINTH_R + 3.6;
+    const a = Math.PI * 0.28 + (i / (TINTS.length - 1)) * Math.PI * 0.58;
+    const r = PLINTH_R + 1.6;
     const x = SHOWROOM_X + Math.cos(a) * r;
     const z = SHOWROOM_Z + Math.sin(a) * r;
     const y = heightAt(x, z);
@@ -114,39 +141,37 @@ export function buildShowroom() {
     });
   });
 
-  // ---------- gear rack ----------
+  // ---------- gear stands, one per item ----------
 
-  const rackX = SHOWROOM_X + 3.4;
-  const rackZ = SHOWROOM_Z + 4.6;
-  const rackY = heightAt(rackX, rackZ);
-  const rackParts = [];
-  for (const dx of [-0.7, 0.7]) {
-    const leg = new THREE.BoxGeometry(0.11, 1.1, 0.11);
-    leg.translate(dx, 0.55, 0);
-    rackParts.push(paint(leg, '#6b4e33'));
+  const items = itemSpots();
+  for (const spot of items) {
+    // a slim post with a small tray on top for the item to rest on
+    const post = new THREE.CylinderGeometry(0.09, 0.13, 0.72, 8);
+    post.translate(0, 0.36, 0);
+    const tray = new THREE.CylinderGeometry(0.28, 0.24, 0.1, 8);
+    tray.translate(0, 0.77, 0);
+    const g = merge([
+      paint(post, spot.node ? '#8d7a58' : '#9a9384'),
+      paint(tray, spot.node ? '#ddd0b2' : '#c6bfae'),
+    ]);
+    g.translate(spot.x, spot.y, spot.z);
+    parts.push(g);
+
+    colliders.push({ x: spot.x, z: spot.z, r: 0.34 });
+    interactables.push({
+      kind: 'take',
+      label: spot.node ? `take the ${spot.label}` : 'carry nothing',
+      anchor: new THREE.Vector3(spot.x, spot.y + 1.5, spot.z),
+      itemNode: spot.node,
+      itemLabel: spot.label,
+    });
   }
-  const bar = new THREE.BoxGeometry(1.6, 0.1, 0.1);
-  bar.translate(0, 1.05, 0);
-  rackParts.push(paint(bar, '#8a6a48'));
-  const shelf = new THREE.BoxGeometry(1.6, 0.08, 0.42);
-  shelf.translate(0, 0.62, 0);
-  rackParts.push(paint(shelf, '#c99f63'));
-  const rack = merge(rackParts);
-  rack.translate(rackX, rackY, rackZ);
-  parts.push(rack);
-
-  colliders.push({ x: rackX, z: rackZ, r: 0.9 });
-  interactables.push({
-    kind: 'item',
-    label: 'pick something up',
-    anchor: new THREE.Vector3(rackX, rackY + 1.7, rackZ),
-  });
 
   // ---------- ring of stones marking the clearing ----------
 
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    const r = PLINTH_R + 5.4;
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const r = ITEM_R + 3.2;
     const x = SHOWROOM_X + Math.cos(a) * r;
     const z = SHOWROOM_Z + Math.sin(a) * r;
     const s = 0.22 + ((i * 37) % 10) / 40;

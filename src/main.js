@@ -6,7 +6,15 @@ import { buildSky, buildClouds, buildBirds } from './sky.js';
 import { buildPollen, buildDistantHills } from './atmosphere.js';
 import { buildScatter } from './scatter.js';
 import { buildProps } from './props.js';
-import { buildShowroom, plinthSpots, SHOWROOM_X, SHOWROOM_Z, STATUE_RANGE } from './showroom.js';
+import {
+  buildShowroom,
+  plinthSpots,
+  itemSpots,
+  ITEM_DISPLAY_Y,
+  SHOWROOM_X,
+  SHOWROOM_Z,
+  STATUE_RANGE,
+} from './showroom.js';
 import { Input } from './input.js';
 import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
@@ -26,10 +34,14 @@ import {
   TINTS,
   pickLook,
   itemsFor,
+  holdersOf,
   MAX_HEALTH,
   weaponOf,
   inSafeZone,
 } from '../shared/world.js';
+
+const niceModel = (m) => m.replace('_', ' ').toLowerCase();
+const canHold = (node) => itemsFor(myLook.model).some((i) => i.node === node);
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -135,6 +147,7 @@ const status = document.getElementById('status');
 const nameTags = new NameTags(camera, document.getElementById('tags'));
 const remotes = new Map(); // id -> RemoteCharacter
 const statues = [];
+const exhibits = []; // item copies resting on the gear stands
 let net = null;
 let playerLook = null;
 let soloStarted = false;
@@ -159,6 +172,7 @@ window.__wa = {
   heightAt,
   remotes,
   statues,
+  exhibits,
   get look() {
     return myLook;
   },
@@ -257,6 +271,7 @@ function changeMyLook(patch) {
 function loadStatues() {
   if (statuesLoaded) return;
   statuesLoaded = true;
+  showItemsOnStands();
   for (const spot of plinthSpots()) {
     loadModel(spot.model)
       .then((gltf) => {
@@ -269,6 +284,46 @@ function loadStatues() {
         statues.push(rig);
       })
       .catch((err) => console.error(`statue ${spot.model} failed:`, err));
+  }
+}
+
+// Lift an item off the character it is rigged to, so it can stand on its own
+// pedestal. The source node is posed in a hand, so its transform is reset.
+function displayCopyOf(gltf, nodeName) {
+  const src = gltf.scene.getObjectByName(nodeName);
+  if (!src) return null;
+  const copy = src.clone(true);
+  copy.position.set(0, 0, 0);
+  copy.rotation.set(0, 0, 0);
+  copy.scale.setScalar(1);
+  copy.traverse((o) => {
+    o.visible = true; // rigs hide these; a display copy must not be
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.frustumCulled = true;
+    }
+  });
+  return copy;
+}
+
+function showItemsOnStands() {
+  for (const spot of itemSpots()) {
+    if (!spot.node) continue; // the bare "carry nothing" stand
+    loadModel(spot.model)
+      .then((gltf) => {
+        const shown = displayCopyOf(gltf, spot.node);
+        if (!shown) {
+          console.warn(`showroom: ${spot.model} has no node called ${spot.node}`);
+          return;
+        }
+        const holder = new THREE.Group();
+        holder.add(shown);
+        holder.position.set(spot.x, spot.y + ITEM_DISPLAY_Y, spot.z);
+        holder.scale.setScalar(0.8);
+        scene.add(holder);
+        exhibits.push(holder);
+      })
+      .catch((err) => console.error(`display ${spot.node} failed:`, err));
   }
 }
 
@@ -543,26 +598,26 @@ renderer.setAnimationLoop(() => {
     } else {
       const near = interactions.nearest(player.root.position);
       if (near) {
-        // the gear rack names whatever you would pick up next
+        // a gear stand says whether this is yours to take
         let label = near.label;
-        if (near.kind === 'item') {
-          const list = itemsFor(myLook.model);
-          const at = list.findIndex((i) => i.node === myLook.item);
-          const next = list[at + 1] ?? null;
-          label = next ? `pick up the ${next.label}` : 'put it down';
+        if (near.kind === 'take' && near.itemNode) {
+          if (myLook.item === near.itemNode) label = `carrying the ${near.itemLabel}`;
+          else if (canHold(near.itemNode)) label = `take the ${near.itemLabel}`;
+          else label = `${near.itemLabel} — ${holdersOf(near.itemNode).map(niceModel).join('/')} only`;
         }
         interactions.show(near.anchor, label, !input.isTouch);
         if (pressed) {
           if (near.kind === 'wear') {
             changeMyLook(near.look);
             player.interact(near);
-          } else if (near.kind === 'item') {
-            // cycle: nothing -> first item -> ... -> nothing
-            const list = itemsFor(myLook.model);
-            const at = list.findIndex((i) => i.node === myLook.item);
-            const next = list[at + 1] ?? null;
-            changeMyLook({ item: next ? next.node : null });
-            player.interact(near);
+          } else if (near.kind === 'take') {
+            if (!near.itemNode || canHold(near.itemNode)) {
+              changeMyLook({ item: near.itemNode ?? null });
+              player.interact(near);
+            } else {
+              const who = holdersOf(near.itemNode).map(niceModel).join(' or ');
+              setStatus(`only the ${who} can carry that`, 'warn');
+            }
           } else if (near.kind === 'rest') {
             player.beginRest(near);
           } else if (near.kind === 'greet') {
