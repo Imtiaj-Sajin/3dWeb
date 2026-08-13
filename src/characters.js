@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { heightAt, roadX, WORLD_RADIUS } from './terrain.js';
+import { SKIN_PART } from '../shared/world.js';
 
 const CHARACTER_HEIGHT = 1.5;
 const GRAVITY = 16;
@@ -72,6 +73,21 @@ export function createRig(gltf) {
   }
 
   return { root, model, mixer, actions };
+}
+
+// Give a rig its clothing colour and build. createRig hands every character
+// its own material instances, so tinting one never leaks into another.
+export function applyLook(root, look) {
+  if (!look) return;
+  if (look.tint && look.tint !== '#ffffff') {
+    const tint = new THREE.Color(look.tint);
+    root.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      if (SKIN_PART.test(o.name)) return; // faces and hair stay as authored
+      o.material.color.multiply(tint);
+    });
+  }
+  if (look.scale && look.scale !== 1) root.scale.setScalar(look.scale);
 }
 
 class AnimatedCharacter {

@@ -9,10 +9,17 @@ import { buildProps } from './props.js';
 import { Input } from './input.js';
 import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
-import { loadCharacterGLBs, createRig, Player, NPC, separateCharacters } from './characters.js';
+import {
+  loadCharacterGLBs,
+  createRig,
+  applyLook,
+  Player,
+  NPC,
+  separateCharacters,
+} from './characters.js';
 import { Net, serverUrl } from './net.js';
 import { RemoteCharacter, NameTags } from './remote.js';
-import { ANIM, MODELS } from '../shared/world.js';
+import { ANIM, MODELS, pickLook } from '../shared/world.js';
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -156,6 +163,29 @@ function addRemote(info) {
   });
 }
 
+// Give the local player the look the server handed out, so the character you
+// see is the character everyone else sees. Swaps the whole rig when the model
+// differs, keeping wherever you were standing.
+function setPlayerLook(look) {
+  if (!look || !gltfByModel) return;
+  const gltf = gltfByModel[look.model] ?? gltfByModel[MODELS[0]];
+  const rig = createRig(gltf);
+  applyLook(rig.root, look);
+
+  const old = player.root;
+  rig.root.position.copy(old.position);
+  rig.root.rotation.copy(old.rotation);
+  scene.remove(old);
+  player.mixer.stopAllAction();
+
+  player.root = rig.root;
+  player.mixer = rig.mixer;
+  player.actions = rig.actions;
+  player.current = null;
+  player.play('Idle', 0);
+  scene.add(rig.root);
+}
+
 function removeRemote(id) {
   const rc = remotes.get(id);
   if (!rc) return;
@@ -186,6 +216,9 @@ function playSolo(reason) {
 }
 
 function connectOrPlaySolo() {
+  // Offline you still get a look of your own, just a locally chosen one.
+  setPlayerLook(pickLook());
+
   const url = serverUrl();
   if (!url) {
     playSolo('');
@@ -199,6 +232,7 @@ function connectOrPlaySolo() {
       npcs.length = 0;
       interactions.items = interactions.items.filter((it) => !it.npc);
       player.root.position.set(m.spawn.x, heightAt(m.spawn.x, m.spawn.z), m.spawn.z);
+      setPlayerLook(m.you);
       for (const who of m.others) addRemote(who);
       setStatus(`you are ${m.you.name}`, 'live');
     },

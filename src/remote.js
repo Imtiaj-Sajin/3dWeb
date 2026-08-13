@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
+import { applyLook } from './characters.js';
 import { ANIM, ANIM_CLIP } from '../shared/world.js';
 
 function damp(k, dt) {
@@ -42,12 +43,7 @@ export class RemoteCharacter {
     this.bodyRadius = 0.42;
     this.inverseMass = 0;
 
-    if (info.tint && info.tint !== '#ffffff') {
-      const tint = new THREE.Color(info.tint);
-      this.root.traverse((o) => {
-        if (o.isMesh && o.material) o.material.color.multiply(tint);
-      });
-    }
+    applyLook(this.root, info);
 
     this.play('Idle', 0);
   }

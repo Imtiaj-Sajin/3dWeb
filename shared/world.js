@@ -44,18 +44,28 @@ export const ANIM_CLIP = {
 
 export const MODELS = ['Rogue', 'Knight', 'Barbarian'];
 
-// Subtle clothing tints multiplied over the character texture, so the same
-// three models can front a much larger crowd.
+// Never tint these — a green face reads as a bug, not as variety.
+export const SKIN_PART = /head|face|hair/i;
+
+// Clothing tints multiplied over the character texture. Kept light, because
+// multiplying only ever darkens — a saturated tint turns the outfit muddy.
+// Free variety: no extra download, no extra draw calls.
 export const TINTS = [
-  '#ffffff',
-  '#ffd9c2',
-  '#c8e2ff',
-  '#d5f0cd',
-  '#f4d3ef',
-  '#ffeeb0',
-  '#cfe9e4',
-  '#e6d6ff',
+  '#ffffff', '#ffd0b0', '#b9daff', '#c6ecbb', '#f6c8e2', '#ffe89a', '#bde4dc',
+  '#dcc9ff', '#ffc0c0', '#cdeeff', '#ddf7c0', '#ffd6ea', '#c9d4ff', '#ffe6bd',
 ];
+
+// A little height difference reads as strongly as colour at a distance.
+export const SCALES = [0.93, 1.0, 1.07];
+
+// model x tint x scale — 3 x 14 x 3 = 126 distinguishable people
+export function pickLook(rand = Math.random) {
+  return {
+    model: MODELS[Math.floor(rand() * MODELS.length)],
+    tint: TINTS[Math.floor(rand() * TINTS.length)],
+    scale: SCALES[Math.floor(rand() * SCALES.length)],
+  };
+}
 
 // Names are one word plus a number, generated on the fly and never stored.
 export const NAME_WORDS = [

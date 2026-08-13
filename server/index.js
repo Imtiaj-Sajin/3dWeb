@@ -17,7 +17,7 @@ import {
   ROAD_Z_MAX,
   ANIM,
   MODELS,
-  TINTS,
+  pickLook,
   makeName,
 } from '../shared/world.js';
 
@@ -63,8 +63,8 @@ function spawnBot(i) {
     id: -(i + 1),
     bot: true,
     name: uniqueName(),
-    model: MODELS[i % MODELS.length],
-    tint: TINTS[(i * 3 + 1) % TINTS.length],
+    ...pickLook(),
+    model: MODELS[i % MODELS.length], // one of each, so the bots never twin
     x: roadX(z) + rand(-BOT_LANE, BOT_LANE),
     z,
     h: Math.PI,
@@ -130,7 +130,14 @@ for (let i = 0; i < BOT_COUNT; i++) spawnBot(i);
 
 // ---------- wire format ----------
 
-const meta = (e) => ({ id: e.id, name: e.name, model: e.model, tint: e.tint, bot: !!e.bot });
+const meta = (e) => ({
+  id: e.id,
+  name: e.name,
+  model: e.model,
+  tint: e.tint,
+  scale: e.scale,
+  bot: !!e.bot,
+});
 const send = (ws, msg) => {
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));
 };
@@ -160,8 +167,7 @@ wss.on('connection', (ws) => {
     id,
     ws,
     name: uniqueName(),
-    model: MODELS[id % MODELS.length],
-    tint: TINTS[id % TINTS.length],
+    ...pickLook(),
     x: roadX(spawnZ),
     z: spawnZ,
     h: Math.PI,

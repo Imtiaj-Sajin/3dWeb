@@ -7,6 +7,10 @@
 const RATE_MS = 100; // match the server tick — 10 updates a second
 
 export function serverUrl() {
+  // ?server=ws://host:port — point a tab at a different room without a rebuild
+  const override = new URLSearchParams(location.search).get('server');
+  if (override) return override;
+
   const configured = import.meta.env.VITE_SERVER_URL;
   if (configured) return configured;
   // during local dev, assume the server is running alongside vite
