@@ -38,9 +38,15 @@ function roadAngle(z) {
 // Measured from the seated pose (Sit_Chair_Idle): where the character's hips
 // end up relative to their root. The bench is sized and the sit spot placed
 // from these, so the pose lands on the seat instead of through the backrest.
-const SIT_HIP_UP = 0.331;
+// Measured from the seated pose: this clip draws the knees up, so the soles
+// end up almost level with the hips. The seat is therefore aligned to the
+// soles — aligning it to the hips buries the boots in the planks.
+const SIT_SOLE_UP = 0.233;
 const SIT_HIP_BACK = 0.272;
-const SEAT_TOP = 0.33; // bench seat height, matched to the animation
+// A real roadside bench, not one scaled down to the animation: the character
+// is lifted onto the seat instead, so a short kid's feet dangle as they should.
+const SEAT_TOP = 0.42;
+const BENCH_LEN = 1.9;
 
 export function buildProps() {
   const group = new THREE.Group();
@@ -146,24 +152,33 @@ export function buildProps() {
   function bench(z, side) {
     const x = roadX(z) + side * 5.2;
     const rotY = roadAngle(z) + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
-    const legH = SEAT_TOP - 0.05;
-
+    const legH = SEAT_TOP - 0.055;
     const parts = [];
-    for (const dx of [-0.68, 0.68]) {
-      const leg = new THREE.BoxGeometry(0.1, legH, 0.5);
-      leg.translate(dx, legH / 2, 0);
-      parts.push(paint(leg, '#6b4e33'));
-      const post = new THREE.BoxGeometry(0.09, 0.72, 0.09);
-      post.translate(dx, 0.36, -0.28);
+
+    // four legs, joined by a stretcher at each end
+    for (const dx of [-0.8, 0.8]) {
+      for (const dz of [-0.2, 0.2]) {
+        const leg = new THREE.BoxGeometry(0.09, legH, 0.09);
+        leg.translate(dx, legH / 2, dz);
+        parts.push(paint(leg, '#6b4e33'));
+      }
+      const rail = new THREE.BoxGeometry(0.07, 0.07, 0.46);
+      rail.translate(dx, 0.16, 0);
+      parts.push(paint(rail, '#6b4e33'));
+
+      // backrest post
+      const post = new THREE.BoxGeometry(0.08, 0.56, 0.09);
+      post.translate(dx, SEAT_TOP + 0.26, -0.27);
       parts.push(paint(post, '#6b4e33'));
     }
-    for (const dz of [-0.2, 0, 0.2]) {
-      const slat = new THREE.BoxGeometry(1.7, 0.05, 0.17);
-      slat.translate(0, SEAT_TOP - 0.025, dz);
+
+    for (const dz of [-0.185, 0, 0.185]) {
+      const slat = new THREE.BoxGeometry(BENCH_LEN, 0.055, 0.15);
+      slat.translate(0, SEAT_TOP - 0.028, dz);
       parts.push(paint(slat, '#c99f63'));
     }
-    for (const dy of [0.52, 0.68]) {
-      const back = new THREE.BoxGeometry(1.7, 0.11, 0.05);
+    for (const dy of [0.63, 0.83]) {
+      const back = new THREE.BoxGeometry(BENCH_LEN, 0.13, 0.05);
       back.translate(0, dy, -0.28);
       parts.push(paint(back, '#c99f63'));
     }
@@ -175,14 +190,14 @@ export function buildProps() {
     const toWorld = (lx, lz) => ({ x: x + lx * cs + lz * sn, z: z - lx * sn + lz * cs });
 
     let y = Infinity;
-    for (const [lx, lz] of [[-0.68, -0.25], [0.68, -0.25], [-0.68, 0.25], [0.68, 0.25]]) {
+    for (const [lx, lz] of [[-0.8, -0.2], [0.8, -0.2], [-0.8, 0.2], [0.8, 0.2]]) {
       const w = toWorld(lx, lz);
       y = Math.min(y, heightAt(w.x, w.z));
     }
     const base = y - 0.02;
     g.translate(x, base, z);
 
-    const collider = { x, z, r: 0.85 };
+    const collider = { x, z, r: 0.95 };
     colliders.push(collider);
 
     // sit spot: shifted forward so the hips land on the seat, and lifted so
@@ -191,8 +206,8 @@ export function buildProps() {
     interactables.push({
       kind: 'rest',
       label: 'sit',
-      anchor: new THREE.Vector3(x, base + 1.25, z),
-      spot: { x: seat.x, y: base + SEAT_TOP + 0.035 - SIT_HIP_UP, z: seat.z },
+      anchor: new THREE.Vector3(x, base + 1.35, z),
+      spot: { x: seat.x, y: base + SEAT_TOP - SIT_SOLE_UP, z: seat.z },
       facing: rotY, // model forward is +z, which the bench faces toward the road
       collider, // ignored until the player walks clear after standing up
       clips: { enter: 'Sit_Chair_Down', idle: 'Sit_Chair_Idle', exit: 'Sit_Chair_StandUp' },
