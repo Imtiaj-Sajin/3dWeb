@@ -9,7 +9,7 @@ import { buildProps } from './props.js';
 import { Input } from './input.js';
 import { Interactions } from './interactions.js';
 import { CameraRig } from './camera.js';
-import { loadCharacterGLBs, createRig, Player, NPC } from './characters.js';
+import { loadCharacterGLBs, createRig, Player, NPC, separateCharacters } from './characters.js';
 
 const FOG_COLOR = '#eeddc0';
 const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -234,6 +234,8 @@ renderer.setAnimationLoop(() => {
       }
     }
     for (const npc of npcs) npc.update(dt, colliders);
+    // keep bodies out of each other before the camera reads the final pose
+    separateCharacters([player, ...npcs], colliders);
     rig.update(dt, player, input);
 
     // keep the shadow frustum centered on the player

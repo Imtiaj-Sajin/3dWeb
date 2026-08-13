@@ -85,6 +85,21 @@ class AnimatedCharacter {
     this.vy = 0;
     this.grounded = true;
     this.ignoreCollider = null;
+    this.bodyRadius = 0.42;
+    // inverse mass decides who gives way in a shove; 0 means immovable
+    this.inverseMass = 1;
+  }
+
+  get immovable() {
+    return false;
+  }
+
+  // re-settle after being pushed by another character
+  settleAfterPush(colliders) {
+    this.resolveCollisions(colliders);
+    if (this.grounded) {
+      this.root.position.y = heightAt(this.root.position.x, this.root.position.z);
+    }
   }
 
   play(name, fade = 0.22, once = false) {
@@ -165,11 +180,18 @@ export class Player extends AnimatedCharacter {
     this.rest = null;
     this.faceTarget = null;
     this.justWaved = false;
+    // the player shrugs off bumps; NPCs do most of the stepping aside
+    this.inverseMass = 0.34;
     this.play('Idle', 0);
   }
 
   get busy() {
     return this.mode !== 'free';
+  }
+
+  // while seated the pose is pinned, so nobody gets to shove the player
+  get immovable() {
+    return this.rest !== null;
   }
 
   get isResting() {
@@ -335,6 +357,49 @@ export class Player extends AnimatedCharacter {
     }
 
     this.mixer.update(dt);
+  }
+}
+
+// Push overlapping characters apart. Each pair splits the correction by
+// inverse mass, so the player barely budges while an NPC steps aside — and a
+// seated player does not budge at all.
+export function separateCharacters(list, colliders) {
+  let moved = false;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i];
+      const b = list[j];
+      const ax = a.root.position;
+      const bx = b.root.position;
+      const dx = bx.x - ax.x;
+      const dz = bx.z - ax.z;
+      const min = a.bodyRadius + b.bodyRadius;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= min * min) continue;
+
+      const wa = a.immovable ? 0 : a.inverseMass;
+      const wb = b.immovable ? 0 : b.inverseMass;
+      const total = wa + wb;
+      if (total <= 0) continue;
+
+      // exactly stacked: shove apart along an arbitrary axis
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-4 ? dx / d : 1;
+      const nz = d > 1e-4 ? dz / d : 0;
+      const overlap = min - d;
+
+      ax.x -= nx * overlap * (wa / total);
+      ax.z -= nz * overlap * (wa / total);
+      bx.x += nx * overlap * (wb / total);
+      bx.z += nz * overlap * (wb / total);
+      moved = true;
+    }
+  }
+
+  if (moved) {
+    for (const c of list) {
+      if (!c.immovable) c.settleAfterPush(colliders);
+    }
   }
 }
 
